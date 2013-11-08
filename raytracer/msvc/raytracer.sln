@@ -3,8 +3,6 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2012
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "raytracer", "raytracer.vcxproj", "{823B72C8-0DC3-412B-B109-387F33CF95B7}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "trys", "..\..\Trys\msvc\trys.vcxproj", "{DC9E551E-BBE5-4EB0-B2CA-B6D83E84C78A}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -15,10 +13,6 @@ Global
 		{823B72C8-0DC3-412B-B109-387F33CF95B7}.Debug|x64.Build.0 = Debug|x64
 		{823B72C8-0DC3-412B-B109-387F33CF95B7}.Release|x64.ActiveCfg = Release|x64
 		{823B72C8-0DC3-412B-B109-387F33CF95B7}.Release|x64.Build.0 = Release|x64
-		{DC9E551E-BBE5-4EB0-B2CA-B6D83E84C78A}.Debug|x64.ActiveCfg = Debug|x64
-		{DC9E551E-BBE5-4EB0-B2CA-B6D83E84C78A}.Debug|x64.Build.0 = Debug|x64
-		{DC9E551E-BBE5-4EB0-B2CA-B6D83E84C78A}.Release|x64.ActiveCfg = Release|x64
-		{DC9E551E-BBE5-4EB0-B2CA-B6D83E84C78A}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
