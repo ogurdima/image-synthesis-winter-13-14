@@ -1,0 +1,1 @@
+"C:\Python27\python" "%MAYA_APP_DIR%\post_build.py"
