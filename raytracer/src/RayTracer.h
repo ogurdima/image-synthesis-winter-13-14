@@ -27,7 +27,7 @@
 using std::vector;
 
 
-class RayTracer : public MPxCommand 
+class RayTracer : public MPxCommand
 {
 
 	MPoint minScene;
