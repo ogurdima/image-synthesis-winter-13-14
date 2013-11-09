@@ -106,9 +106,11 @@ if EXIST "$(MAYA_APP_DIR)\2014-x64\plugins$(TargetFileName)" (
   <ItemGroup>
     <ClCompile Include="..\src\pluginMain.cpp" />
     <ClCompile Include="..\src\RayTracer.cpp" />
+    <ClCompile Include="Voxel.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\RayTracer.h" />
+    <ClInclude Include="Voxel.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

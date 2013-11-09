@@ -1,7 +1,6 @@
 #include "RayTracer.h"
 
-#include <vector>
-using std::vector;
+
 
 #pragma region MyRegion
 
@@ -323,6 +322,29 @@ void RayTracer::getCameraInfo()
     MFloatMatrix cameraMat( mat.matrix );
 }
 
+void getPoints(MFnMesh &mesh, int face, int triangle, MPoint *points, MVector * normals )
+{
+	int vertices[3];
+	mesh.getPolygonTriangleVertices(face, triangle, vertices);
+	MPointArray allPts;
+	mesh.getPoints(allPts, MSpace::kWorld);
+
+	MColorArray colors;
+	MColor def(0.5, 0.5, 0.5);
+	
+	mesh.getColors(colors, NULL, &def);
+	int len = colors.length();
+
+
+	for(int i = 0; i < 3; ++i)
+	{
+		mesh.getPoint(vertices[i], points[i], MSpace::kWorld);  
+		mesh.getVertexNormal(vertices[i],false, normals[i], MSpace::kWorld);  
+		
+	}
+
+}
+
 void RayTracer::goOverRays()
 {
 	unsigned char* pixels = new unsigned char[width*height*4];
@@ -350,14 +372,23 @@ void RayTracer::goOverRays()
 			src.y = eyePosition.y;
 			src.z = eyePosition.z;
 
+			
+
 			for( int h = 0; h < height; ++h )
 			{
 				for(int w = 0; w < width; ++w )
 				{
 					MFloatPoint intersection;
 					MFloatVector dir = rayDirections[h][w];
-					if (mesh.closestIntersection( src, dir, NULL, NULL, false,MSpace::kWorld, 10000, false, NULL, intersection, NULL, NULL, NULL, NULL, NULL))
+					int face;
+					int triangle;
+					if (mesh.closestIntersection( src, dir, NULL, NULL, false,MSpace::kWorld, 10000, false, NULL, intersection, NULL, &face, &triangle, NULL, NULL))
 					{
+						MPoint pts[3];
+						MVector normals[3];
+						
+						getPoints(mesh, face, triangle, pts, normals);
+
 						pixels[h*width*4 + w*4] = 255;
 						pixels[h*width*4 + w*4 + 1] = 255;
 						pixels[h*width*4 + w*4 + 2] = 255;
@@ -375,6 +406,65 @@ void RayTracer::goOverRays()
 
 }
 
+void RayTracer::calculateSceneBoundingBox()
+{
+	MStatus status;
+	MItDag dagIterator(MItDag::kDepthFirst, MFn::kMesh , &status);
+	if(badMStatus(status, "MItDag constructor")) { return; }
+
+	for(; !dagIterator.isDone(); dagIterator.next())
+	{
+		MDagPath dagPath;
+		status = dagIterator.getPath(dagPath);
+		if ( badMStatus(status,"MItDag::getPath")) { continue; }
+
+		MFnDagNode dagNode(dagPath, &status);
+		if ( badMStatus(status,"MFnDagNode constructor")) { continue; }
+
+		if(dagPath.hasFn(MFn::kMesh))
+		{
+			MFnMesh mesh(dagPath, &status);
+			if ( badMStatus(status,"MFnMesh constructor")) { continue; }
+
+			MPointArray pts;
+			mesh.getPoints(pts, MSpace::kWorld);
+			for(int pi = pts.length() - 1; pi >= 0; --pi)
+			{
+				MPoint current = pts[pi];
+				if(minScene.x > current.x)
+				{
+					minScene.x = current.x;
+				}
+				if(minScene.y > current.y)
+				{
+					minScene.y = current.y;
+				}
+				if(minScene.z > current.z)
+				{
+					minScene.z = current.z;
+				}
+				if(maxScene.x < current.x)
+				{
+					maxScene.x = current.x;
+				}
+				if(maxScene.y < current.y)
+				{
+					maxScene.y = current.y;
+				}
+				if(maxScene.z < current.z)
+				{
+					maxScene.z = current.z;
+				}
+			}
+		}
+	}
+}
+
+void RayTracer::voxelizeScene()
+{
+
+}
+
 MStatus RayTracer::doIt(const MArgList& argList) 
 {
 	//MGlobal::displayInfo("Welcome to Image Synthesis course");
@@ -382,6 +472,10 @@ MStatus RayTracer::doIt(const MArgList& argList)
 	triangulateMeshes();
 	getLightInfo();
 	getCameraInfo();
+
+	calculateSceneBoundingBox();
+
+	voxelizeScene();
 
 	goOverRays();
 
