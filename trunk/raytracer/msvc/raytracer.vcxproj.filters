@@ -21,7 +21,7 @@
     <ClCompile Include="..\src\RayTracer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Voxel.cpp">
+    <ClCompile Include="..\src\Voxel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -29,7 +29,7 @@
     <ClInclude Include="..\src\RayTracer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Voxel.h">
+    <ClInclude Include="..\src\Voxel.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

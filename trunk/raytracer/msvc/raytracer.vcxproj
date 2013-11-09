@@ -58,6 +58,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_WINDLL;NT_PLUGIN;REQUIRE_IOSTREAM;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <AdditionalIncludeDirectories>$(MAYA_64_DIR)\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -70,10 +71,13 @@
     <PostBuildEvent>
       <Command>xcopy /Y /I "$(TargetPath)" "$(MAYA_APP_DIR)\2014-x64\plugins\"
 "$(MAYA_APP_DIR)\post_build.bat"
-"$(MAYA_APP_DIR)\run_plugin.bat"</Command>
+"$(MAYA_APP_DIR)\run_plugin.bat"
+</Command>
     </PostBuildEvent>
     <PreBuildEvent>
-      <Command>"$(MAYA_APP_DIR)\pre_build.bat"
+      <Command> echo "BLA"
+ "$(MAYA_APP_DIR)\pre_build.bat"
+
 if EXIST "$(MAYA_APP_DIR)\2014-x64\plugins$(TargetFileName)" ( 
  echo del "$(MAYA_APP_DIR)\2014-x64\plugins$(TargetFileName)" 
  del "$(MAYA_APP_DIR)\2014-x64\plugins$(TargetFileName)" 
@@ -106,11 +110,11 @@ if EXIST "$(MAYA_APP_DIR)\2014-x64\plugins$(TargetFileName)" (
   <ItemGroup>
     <ClCompile Include="..\src\pluginMain.cpp" />
     <ClCompile Include="..\src\RayTracer.cpp" />
-    <ClCompile Include="Voxel.cpp" />
+    <ClCompile Include="..\src\Voxel.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\RayTracer.h" />
-    <ClInclude Include="Voxel.h" />
+    <ClInclude Include="..\src\Voxel.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
