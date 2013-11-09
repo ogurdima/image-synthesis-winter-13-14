@@ -21,17 +21,24 @@
 #include <maya/MFloatPoint.h>
 #include <maya/MFloatVector.h>
 #include <maya/MImage.h>
+#include <maya/MBoundingBox.h>
+#include <vector>
 
+using std::vector;
 
 
 class RayTracer : public MPxCommand 
 {
 
+	MPoint minScene;
+	MPoint maxScene;
+
 	int width;
 	int height;
 
-	MVector eyePosition;
+	int granularity;
 
+	MVector eyePosition;
 	MFloatVector ** rayDirections;
 
 public:
@@ -39,6 +46,9 @@ public:
 	RayTracer() {
 		width = 640;
 		height = 480;
+		minScene = MPoint( DBL_MAX ,DBL_MAX,DBL_MAX);
+		maxScene = MPoint(DBL_MIN, DBL_MIN, DBL_MIN);
+		granularity = 5;
 	};
 	virtual MStatus doIt(const MArgList& argList);
 	static void* creator();
@@ -53,5 +63,8 @@ public:
 
 	void getCameraInfo();
 	void goOverRays();
+	void calculateSceneBoundingBox();
+	void voxelizeScene();
 
+	
 };
