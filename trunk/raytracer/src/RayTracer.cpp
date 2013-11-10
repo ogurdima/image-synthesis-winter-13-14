@@ -1,6 +1,6 @@
 #include "RayTracer.h"
 
-
+#define PRINT_IN_MAYA(arg) MGlobal::displayInfo((arg)); 
 
 #pragma region MyRegion
 
@@ -77,7 +77,7 @@ void RayTracer::printObjectTypesInScene2()
 		MMatrix theMatrix = matrix.asMatrix();
 		MPoint centroid = getObjectSpaceCentroid(dagIter.currentItem());
 		MPoint inWorldFrame = centroid * theMatrix;
-		MGlobal::displayInfo(pointToStr(inWorldFrame));
+		MGlobal::displayInfo(pointToString(inWorldFrame));
 		ptsToDraw[i++] = (inWorldFrame * camMatrix);
 		dagIter.next();
 	}
@@ -109,20 +109,6 @@ MPoint RayTracer::getObjectSpaceCentroid(MObject obj)
 	return aggregatedPoint;
 }
 
-MString RayTracer::pointToStr(MPoint p)
-{
-	MString outstr;
-	outstr += "["; 
-	outstr += p.x;
-	outstr += ",";
-	outstr += p.y;
-	outstr += ",";
-	outstr += p.z;
-	outstr += ",";
-	outstr += p.w;
-	outstr += "]";
-	return outstr;
-}
 
 void RayTracer::printObjectTypesInScene()
 {
@@ -201,6 +187,8 @@ bool badMStatus(const MStatus& status, const MString& error)
 	return false;
 }
 
+
+
 void triangulateMesh(const MFnMesh& mesh)
 {
 	MString cmd("polyTriangulate -ch 0 ");
@@ -230,6 +218,11 @@ void triangulateMeshes()
 			triangulateMesh(mesh);
 		}
 	}
+
+	MSelectionList selected;
+	MGlobal::getActiveSelectionList(selected);
+	selected.clear();
+	MGlobal::setActiveSelectionList(selected);
 }
 
 void getLightInfo()
@@ -270,6 +263,8 @@ void getLightInfo()
 	}
 } 
 
+
+
 void RayTracer::getCameraInfo()
 {
 	MDagPath cameraPath;
@@ -287,9 +282,9 @@ void RayTracer::getCameraInfo()
 	double focal = camera.focalLength();
 	double horizontalAperture = camera.horizontalFilmAperture();
 
-	rayDirections = new MFloatVector*[height];
-	for(int i = 0; i < height; ++i)
-	{ rayDirections[i] = new MFloatVector[width]; }
+	rayDirections = new MFloatVector*[imgHeight];
+	for(int i = 0; i < imgHeight; ++i)
+	{ rayDirections[i] = new MFloatVector[imgWidth]; }
 
 
 	MVector xAxis = view ^ up;
@@ -297,10 +292,10 @@ void RayTracer::getCameraInfo()
 	MVector yAxis = xAxis ^ view;
 	yAxis.normalize();
 	MVector center = eye + view * (focal / 10);
-	double delta = (horizontalAperture ) / (double)width;
+	double delta = (horizontalAperture ) / (double)imgWidth;
 
-	int halfWidth = width / 2;
-	int halfHeight = height / 2;
+	int halfWidth = imgWidth / 2;
+	int halfHeight = imgHeight / 2;
 
 	MVector leftBottom = center - delta * halfWidth * xAxis - delta * halfHeight * yAxis;
 	MVector leftBottomCenter =  leftBottom + 0.5 * delta * (xAxis + yAxis);
@@ -309,9 +304,9 @@ void RayTracer::getCameraInfo()
 	MVector dy = delta * yAxis;
 
 
-	for( int h = 0; h < height; ++h )
+	for( int h = 0; h < imgHeight; ++h )
 	{
-		for(int w = 0; w < width; ++w )
+		for(int w = 0; w < imgWidth; ++w )
 		{
 			rayDirections[h][w] = (leftBottomCenter + h * dy + w * dx) - eye;
 		}
@@ -347,8 +342,8 @@ void getPoints(MFnMesh &mesh, int face, int triangle, MPoint *points, MVector * 
 
 void RayTracer::goOverRays()
 {
-	unsigned char* pixels = new unsigned char[width*height*4];
-	memset(pixels,0,width*height*4);
+	unsigned char* pixels = new unsigned char[imgWidth*imgHeight*4];
+	memset(pixels,0,imgWidth*imgHeight*4);
 	MStatus status;
 	MItDag dagIterator(MItDag::kDepthFirst, MFn::kMesh , &status);
 	if(badMStatus(status, "MItDag constructor")) { return; }
@@ -374,9 +369,9 @@ void RayTracer::goOverRays()
 
 			
 
-			for( int h = 0; h < height; ++h )
+			for( int h = 0; h < imgHeight; ++h )
 			{
-				for(int w = 0; w < width; ++w )
+				for(int w = 0; w < imgWidth; ++w )
 				{
 					MFloatPoint intersection;
 					MFloatVector dir = rayDirections[h][w];
@@ -389,9 +384,9 @@ void RayTracer::goOverRays()
 						
 						getPoints(mesh, face, triangle, pts, normals);
 
-						pixels[h*width*4 + w*4] = 255;
-						pixels[h*width*4 + w*4 + 1] = 255;
-						pixels[h*width*4 + w*4 + 2] = 255;
+						pixels[h*imgWidth*4 + w*4] = 255;
+						pixels[h*imgWidth*4 + w*4 + 1] = 255;
+						pixels[h*imgWidth*4 + w*4 + 2] = 255;
 					}
 				}
 			}
@@ -399,7 +394,7 @@ void RayTracer::goOverRays()
 	}
 
 	MImage img;
-	img.setPixels(pixels,width,height);
+	img.setPixels(pixels,imgWidth,imgHeight);
 	img.writeToFile("C://temp//scene.iff");
 	img.release();
 	delete [] pixels;
@@ -460,26 +455,248 @@ void RayTracer::calculateSceneBoundingBox()
 	}
 }
 
-void RayTracer::voxelizeScene()
-{
-
-}
 
 MStatus RayTracer::doIt(const MArgList& argList) 
 {
-	//MGlobal::displayInfo("Welcome to Image Synthesis course");
-	//printCamerasInfo();
+	cout << "Running raytracer plugin..." << endl;
+	MGlobal::displayInfo("Running raytracer plugin...");
+
+
+	storeActiveCameraData();
+	computeAndStoreImagePlaneData();
+	storeLightingData();
+	triangulateMeshes();
+	computeAndStoreMeshData();
+	computeAndStoreSceneBoundingBox();
+	voxelizeScene();
+
+	/*
 	triangulateMeshes();
 	getLightInfo();
 	getCameraInfo();
-
 	calculateSceneBoundingBox();
-
 	voxelizeScene();
-
 	goOverRays();
+	*/
 
-	MGlobal::displayInfo("DONE!");
+
+	MGlobal::displayInfo("Raytracer plugin run finished!");
+	cout << "Raytracer plugin run finished!" << endl;  
 	return MS::kSuccess;
+}
+
+
+
+
+void RayTracer::storeActiveCameraData()
+{
+	MDagPath cameraPath;
+	MStatus status;
+	M3dView::active3dView().getCamera( cameraPath );
+	MFnCamera camera(cameraPath, &status);
+	CHECK_MSTATUS(status);
+	MVector up = camera.upDirection(MSpace::kWorld);
+	up.normalize();
+	MVector view = camera.viewDirection(MSpace::kWorld);
+	view.normalize();
+	MVector eye = camera.eyePoint(MSpace::kWorld, &status);
+	CHECK_MSTATUS(status);
+	double focalMm = camera.focalLength();
+	double horizontalAperture = camera.horizontalFilmAperture();
+
+	activeCameraData.eye = eye;
+	activeCameraData.filmWidthCm = horizontalAperture;
+	activeCameraData.focalLengthCm = (focalMm / 10);
+	activeCameraData.upDir = up;
+	activeCameraData.viewDir = view;
+	
+	PRINT_IN_MAYA(activeCameraData.toString());
+}
+
+void RayTracer::computeAndStoreImagePlaneData()
+{
+	MVector xAxis = activeCameraData.viewDir ^ activeCameraData.upDir;
+	xAxis.normalize();
+	MVector yAxis = xAxis ^ activeCameraData.viewDir;
+	yAxis.normalize();
+
+	imagePlane.x = xAxis;
+	imagePlane.y = yAxis;
+
+	MPoint centerPoint = activeCameraData.eye + (activeCameraData.focalLengthCm * activeCameraData.viewDir);
+
+	
+	double imgAspect = (double)imgWidth / (double)imgHeight;
+	//double pixelWidth = (activeCameraData.filmWidthCm)/(double)imgWidth;
+	//double pixelHeight = pixelWidth / imgAspect;
+	imagePlane.dp = (activeCameraData.filmWidthCm)/(double)imgWidth;
+
+	int halfWidth = imgWidth / 2;
+	int halfHeight = imgHeight / 2;
+
+	imagePlane.lb = centerPoint - (imagePlane.dp * halfWidth * imagePlane.x) - (imagePlane.dp * halfHeight * imagePlane.y);
+	imagePlane.lt = centerPoint - (imagePlane.dp * halfWidth * imagePlane.x) + (imagePlane.dp * halfHeight * imagePlane.y);
+	imagePlane.rb = centerPoint + (imagePlane.dp * halfWidth * imagePlane.x) - (imagePlane.dp * halfHeight * imagePlane.y);
+	imagePlane.rt = centerPoint + (imagePlane.dp * halfWidth * imagePlane.x) + (imagePlane.dp * halfHeight * imagePlane.y);
+
+}
+
+#pragma region storeLighting
+
+void RayTracer::storeLightingData()
+{
+	MStatus status;
+	MItDag dagIterator(MItDag::kDepthFirst, MFn::kLight , &status);
+	CHECK_MSTATUS(status);
+	for(; !dagIterator.isDone(); dagIterator.next())
+	{
+		MDagPath dagPath;
+		status = dagIterator.getPath(dagPath);
+		CHECK_MSTATUS(status);
+
+		if(!dagPath.hasFn(MFn::kLight)) {
+			continue;
+		}
+		
+		if(dagPath.hasFn(MFn::kAmbientLight))
+		{
+			//PRINT_IN_MAYA("kAmbientLight");
+			storeAmbientLight(dagPath);
+		}
+		else if(dagPath.hasFn(MFn::kDirectionalLight))
+		{
+			//PRINT_IN_MAYA("kDirectionalLight");
+			storeDirectionalLight(dagPath);
+		}
+		else if(dagPath.hasFn(MFn::kPointLight))
+		{
+			//PRINT_IN_MAYA("kPointLight");
+			storePointLight(dagPath);
+		}
+		else 
+		{
+			PRINT_IN_MAYA("Unsupported light");
+		}
+	}
+
+	for (int i = 0; i < lightingData.size(); i++)
+	{
+		PRINT_IN_MAYA(lightingData[i].toString());
+	}
+}
+
+void RayTracer::storeAmbientLight(MDagPath lightDagPath)
+{
+	MStatus status;
+	MFnLight l(lightDagPath);
+	MColor lightColor = l.color();
+	//PRINT_IN_MAYA(MString("Color is:") + colorToString(lightColor));
+
+	LightDataT ld;
+	ld.type = LightDataT::AMBIENT;
+	ld.color = l.color();
+	lightingData.push_back(ld);
+}
+
+void RayTracer::storeDirectionalLight(MDagPath lightDagPath)
+{
+
+	MStatus status;
+	MFnLight l(lightDagPath);
+	MFloatVector dirFloat = l.lightDirection(lightDagPath.instanceNumber(), MSpace::kWorld, &status);
+	CHECK_MSTATUS(status);
+
+	MVector dir;
+	dir.x = (double) dirFloat.x;
+	dir.y = (double) dirFloat.y;
+	dir.z = (double) dirFloat.z;
+	//PRINT_IN_MAYA(MString("Directional Light in WF:") + vectorToString(dir));
+
+	LightDataT ld;
+	ld.type = LightDataT::DIRECTIONAL;
+	ld.color = l.color();
+	ld.direction = dir;
+	lightingData.push_back(ld);
+}
+
+void RayTracer::storePointLight(MDagPath lightDagPath)
+{
+	MStatus status;
+	MFnLight l(lightDagPath);
+	MMatrix transform = getDagPathTransformationMatrix(lightDagPath, &status);
+	CHECK_MSTATUS(status);
+	MPoint pointLightOrigin = MPoint(0,0,0,1);
+	MPoint positionWorldFrame = pointLightOrigin * transform;
+	//PRINT_IN_MAYA(MString("Point Light in WF:") + pointToString(positionWorldFrame));
+
+	LightDataT ld;
+	ld.type = LightDataT::POINT;
+	ld.color = l.color();
+	ld.position = positionWorldFrame;
+	lightingData.push_back(ld);
+}
+
+// storeLighting
+#pragma endregion 
+
+void RayTracer::computeAndStoreMeshData()
+{
+	MStatus status;
+	MItDag dagIterator(MItDag::kDepthFirst, MFn::kMesh , &status);
+	CHECK_MSTATUS(status);
+	for(; !dagIterator.isDone(); dagIterator.next())
+	{
+		MDagPath dagPath;
+		status = dagIterator.getPath(dagPath);
+		CHECK_MSTATUS(status);
+		pair<MPoint,MPoint> boundingBox = computeWfAxisAlignedBoundingBox(dagPath);
+		MeshDataT aMesh;
+		aMesh.dagPath = dagPath;
+		aMesh.min = boundingBox.first;
+		aMesh.max = boundingBox.second;
+		meshesData.push_back(aMesh);
+		PRINT_IN_MAYA(MString("Storing mesh, bb is:") + pointToString(aMesh.min) + "," + pointToString(aMesh.max));
+	}
+}
+
+void RayTracer::computeAndStoreSceneBoundingBox()
+{
+	minScene = MPoint( DBL_MAX ,DBL_MAX,DBL_MAX);
+	maxScene = MPoint(DBL_MIN, DBL_MIN, DBL_MIN);
+	for (int i = 0; i < meshesData.size(); i++) 
+	{
+		minimize(&(minScene.x), meshesData[i].min.x);
+		minimize(&(minScene.y), meshesData[i].min.y);
+		minimize(&(minScene.z), meshesData[i].min.z);
+
+		maximize(&(maxScene.x), meshesData[i].max.x);
+		maximize(&(maxScene.y), meshesData[i].max.y);
+		maximize(&(maxScene.z), meshesData[i].max.z);
+	}
+
+	PRINT_IN_MAYA(MString("Scene, bb is:") + pointToString(minScene) + "," + pointToString(maxScene));
+}
+
+
+void RayTracer::voxelizeScene()
+{
+	computeAndStoreVoxelParams();
+
+}
+
+// TODO: Are voxels supposed to be cubes?
+void RayTracer::computeAndStoreVoxelParams()
+{
+	double sceneSpanX = maxScene.x - minScene.x;
+	double sceneSpanY = maxScene.y - minScene.y;
+	double sceneSpanZ = maxScene.z - minScene.z;
+
+	maximize(&sceneSpanX, 0.001); // to avoid zero voxel size in case of a flat scene
+	maximize(&sceneSpanY, 0.001); // to avoid zero voxel size in case of a flat scene
+	maximize(&sceneSpanZ, 0.001); // to avoid zero voxel size in case of a flat scene
+
+	voxelParams.dx = sceneSpanX / voxelParams.voxelsPerDimension;
+	voxelParams.dy = sceneSpanY / voxelParams.voxelsPerDimension;
+	voxelParams.dz = sceneSpanZ / voxelParams.voxelsPerDimension;
 
 }

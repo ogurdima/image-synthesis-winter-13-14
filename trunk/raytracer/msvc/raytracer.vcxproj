@@ -69,17 +69,20 @@
       <ProfileGuidedDatabase>$(OutDir)$(TargetName).pgd</ProfileGuidedDatabase>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /Y /I "$(TargetPath)" "$(MAYA_APP_DIR)\2014-x64\plugins\"
+      <Command>echo "Copying $(TargetPath) to $(MAYA_APP_DIR)\2014-x64\plugins..."
+xcopy /Y /I "$(TargetPath)" "$(MAYA_APP_DIR)\2014-x64\plugins\"
+echo "Running post build python script..."
 "$(MAYA_APP_DIR)\post_build.bat"
+echo "Running the plugin..."
 "$(MAYA_APP_DIR)\run_plugin.bat"
 </Command>
     </PostBuildEvent>
     <PreBuildEvent>
-      <Command> echo "BLA"
+      <Command> echo "Running pre build python script..."
  "$(MAYA_APP_DIR)\pre_build.bat"
-
+ echo "Pre build python script finished"
 if EXIST "$(MAYA_APP_DIR)\2014-x64\plugins$(TargetFileName)" ( 
- echo del "$(MAYA_APP_DIR)\2014-x64\plugins$(TargetFileName)" 
+ echo Deleting "$(MAYA_APP_DIR)\2014-x64\plugins$(TargetFileName)" 
  del "$(MAYA_APP_DIR)\2014-x64\plugins$(TargetFileName)" 
 )</Command>
     </PreBuildEvent>
@@ -110,10 +113,12 @@ if EXIST "$(MAYA_APP_DIR)\2014-x64\plugins$(TargetFileName)" (
   <ItemGroup>
     <ClCompile Include="..\src\pluginMain.cpp" />
     <ClCompile Include="..\src\RayTracer.cpp" />
+    <ClCompile Include="..\src\Util.cpp" />
     <ClCompile Include="..\src\Voxel.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\RayTracer.h" />
+    <ClInclude Include="..\src\Util.h" />
     <ClInclude Include="..\src\Voxel.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
