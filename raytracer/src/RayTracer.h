@@ -28,6 +28,7 @@
 #include <sstream>
 
 #include "Util.h"
+#include "Voxel.h"
 
 
 using std::vector;
@@ -128,30 +129,28 @@ class RayTracer : public MPxCommand
 
 	} voxelParams;
 
+	struct VoxelDataT
+	{
+		Voxel* v;
+		vector<int> containedMeshIndexes;
+	};
+
+	vector<VoxelDataT> voxelsData;
+
 
 public:
 
-	RayTracer() {
-		imgWidth  = 640;
-		imgHeight = 480;
-		minScene = MPoint( DBL_MAX ,DBL_MAX,DBL_MAX);
-		maxScene = MPoint(DBL_MIN, DBL_MIN, DBL_MIN);
-		voxelParams.voxelsPerDimension = 5;
-
-		meshesData.clear();
-		lightingData.clear();
-
-	};
+	RayTracer();
+	~RayTracer();
 	virtual MStatus doIt(const MArgList& argList);
 	static void* creator();
+
 
 	void printMeshPoints();
 	void printCamerasInfo();
 	void printObjectTypesInScene2();
 	void printObjectTypesInScene();
 	MPoint getObjectSpaceCentroid(MObject obj);
-
-
 	void getCameraInfo();
 	void goOverRays();
 	void calculateSceneBoundingBox();
@@ -169,6 +168,10 @@ public:
 	void computeAndStoreSceneBoundingBox();
 	void voxelizeScene();
 	void computeAndStoreVoxelParams();
+	void computeAndStoreRawVoxelsData();
+	void computeVoxelNeighborhoodData();
+	void computeVoxelMeshBboxIntersections();
+
 
 
 };

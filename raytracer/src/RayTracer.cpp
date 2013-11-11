@@ -2,6 +2,48 @@
 
 #define PRINT_IN_MAYA(arg) MGlobal::displayInfo((arg)); 
 
+
+
+RayTracer::RayTracer() 
+{
+	imgWidth  = 640;
+	imgHeight = 480;
+	minScene = MPoint( DBL_MAX ,DBL_MAX,DBL_MAX);
+	maxScene = MPoint(DBL_MIN, DBL_MIN, DBL_MIN);
+	voxelParams.voxelsPerDimension = 5;
+
+	meshesData.clear();
+	lightingData.clear();
+
+	for (int i = 0; i < voxelsData.size(); i++) {
+		if (voxelsData[i].v != NULL) {
+			delete voxelsData[i].v;
+		}
+	}
+	voxelsData.clear();
+};
+
+RayTracer::~RayTracer() 
+{
+	for (int i = 0; i < voxelsData.size(); i++) {
+		if (voxelsData[i].v != NULL) {
+			delete voxelsData[i].v;
+		}
+	}
+	voxelsData.clear();
+}
+
+
+
+
+
+
+
+
+
+
+
+
 #pragma region MyRegion
 
 void* RayTracer::creator() 
@@ -246,7 +288,7 @@ void getLightInfo()
 		if(dagPath.hasFn(MFn::kLight))
 		{
 			MFnLight light(dagPath, &status);
-			
+
 			if ( badMStatus(status,"MFnLight constructor")) { continue; }
 			lights.push_back(dagPath);
 
@@ -255,9 +297,9 @@ void getLightInfo()
 			if(dagPath.hasFn(MFn::kAmbientLight))
 			{
 				cout << "Ambient light " << light.name() << ", color: ["
-                << color.r << ", "
-                << color.g << ", "
-                << color.b << "]\n" << endl;
+					<< color.r << ", "
+					<< color.g << ", "
+					<< color.b << "]\n" << endl;
 			}
 		}
 	}
@@ -268,7 +310,7 @@ void getLightInfo()
 void RayTracer::getCameraInfo()
 {
 	MDagPath cameraPath;
-    M3dView::active3dView().getCamera( cameraPath );
+	M3dView::active3dView().getCamera( cameraPath );
 	MStatus status;
 	MFnCamera camera(cameraPath, &status);
 	if(badMStatus( status, "MFnCamera c'tor")) { return; }
@@ -311,10 +353,10 @@ void RayTracer::getCameraInfo()
 			rayDirections[h][w] = (leftBottomCenter + h * dy + w * dx) - eye;
 		}
 	}
-	
+
 
 	MMatrix mat = cameraPath.inclusiveMatrix();
-    MFloatMatrix cameraMat( mat.matrix );
+	MFloatMatrix cameraMat( mat.matrix );
 }
 
 void getPoints(MFnMesh &mesh, int face, int triangle, MPoint *points, MVector * normals )
@@ -326,7 +368,7 @@ void getPoints(MFnMesh &mesh, int face, int triangle, MPoint *points, MVector * 
 
 	MColorArray colors;
 	MColor def(0.5, 0.5, 0.5);
-	
+
 	mesh.getColors(colors, NULL, &def);
 	int len = colors.length();
 
@@ -335,7 +377,7 @@ void getPoints(MFnMesh &mesh, int face, int triangle, MPoint *points, MVector * 
 	{
 		mesh.getPoint(vertices[i], points[i], MSpace::kWorld);  
 		mesh.getVertexNormal(vertices[i],false, normals[i], MSpace::kWorld);  
-		
+
 	}
 
 }
@@ -363,11 +405,11 @@ void RayTracer::goOverRays()
 			if ( badMStatus(status,"MFnMesh constructor")) { continue; }
 
 			MFloatPoint src;
-			src.x = eyePosition.x;
-			src.y = eyePosition.y;
-			src.z = eyePosition.z;
+			src.x = (float) eyePosition.x;
+			src.y = (float) eyePosition.y;
+			src.z = (float) eyePosition.z;
 
-			
+
 
 			for( int h = 0; h < imgHeight; ++h )
 			{
@@ -381,7 +423,7 @@ void RayTracer::goOverRays()
 					{
 						MPoint pts[3];
 						MVector normals[3];
-						
+
 						getPoints(mesh, face, triangle, pts, normals);
 
 						pixels[h*imgWidth*4 + w*4] = 255;
@@ -509,7 +551,7 @@ void RayTracer::storeActiveCameraData()
 	activeCameraData.focalLengthCm = (focalMm / 10);
 	activeCameraData.upDir = up;
 	activeCameraData.viewDir = view;
-	
+
 	PRINT_IN_MAYA(activeCameraData.toString());
 }
 
@@ -525,7 +567,7 @@ void RayTracer::computeAndStoreImagePlaneData()
 
 	MPoint centerPoint = activeCameraData.eye + (activeCameraData.focalLengthCm * activeCameraData.viewDir);
 
-	
+
 	double imgAspect = (double)imgWidth / (double)imgHeight;
 	//double pixelWidth = (activeCameraData.filmWidthCm)/(double)imgWidth;
 	//double pixelHeight = pixelWidth / imgAspect;
@@ -557,7 +599,7 @@ void RayTracer::storeLightingData()
 		if(!dagPath.hasFn(MFn::kLight)) {
 			continue;
 		}
-		
+
 		if(dagPath.hasFn(MFn::kAmbientLight))
 		{
 			//PRINT_IN_MAYA("kAmbientLight");
@@ -681,7 +723,9 @@ void RayTracer::computeAndStoreSceneBoundingBox()
 void RayTracer::voxelizeScene()
 {
 	computeAndStoreVoxelParams();
-
+	computeAndStoreRawVoxelsData();
+	computeVoxelNeighborhoodData();
+	computeVoxelMeshBboxIntersections();
 }
 
 // TODO: Are voxels supposed to be cubes?
@@ -691,12 +735,141 @@ void RayTracer::computeAndStoreVoxelParams()
 	double sceneSpanY = maxScene.y - minScene.y;
 	double sceneSpanZ = maxScene.z - minScene.z;
 
-	maximize(&sceneSpanX, 0.001); // to avoid zero voxel size in case of a flat scene
-	maximize(&sceneSpanY, 0.001); // to avoid zero voxel size in case of a flat scene
-	maximize(&sceneSpanZ, 0.001); // to avoid zero voxel size in case of a flat scene
+	maximize(&sceneSpanX, 1); // to avoid zero voxel size in case of a flat scene
+	maximize(&sceneSpanY, 1); // to avoid zero voxel size in case of a flat scene
+	maximize(&sceneSpanZ, 1); // to avoid zero voxel size in case of a flat scene
 
 	voxelParams.dx = sceneSpanX / voxelParams.voxelsPerDimension;
 	voxelParams.dy = sceneSpanY / voxelParams.voxelsPerDimension;
 	voxelParams.dz = sceneSpanZ / voxelParams.voxelsPerDimension;
 
+	PRINT_IN_MAYA((MString("Voxel size: ") + pointToString(MPoint(voxelParams.dx, voxelParams.dy, voxelParams.dz))));
+
+}
+
+void RayTracer::computeAndStoreRawVoxelsData()
+{
+	for (int i = 0; i < voxelsData.size(); i++) {
+		if (voxelsData[i].v != NULL) {
+			delete voxelsData[i].v;
+		}
+	}
+	voxelsData.clear();
+
+	int sideCount = voxelParams.voxelsPerDimension;
+	int maxIdx = sideCount * sideCount * sideCount - 1;
+	voxelsData.resize(maxIdx + 1);
+
+	
+	double dx = voxelParams.dx;
+	double dy = voxelParams.dy;
+	double dz = voxelParams.dz;
+
+	double x = minScene.x;
+	double y = minScene.y;
+	double z = minScene.z;
+
+	// TODO: Can reverse loops order to improve performance
+	x = minScene.x;;
+	for (int ix = 0; ix < sideCount; x += dx, ix++)
+	{
+		y = minScene.y;
+		for (int iy = 0; iy < sideCount; y += dy, iy++) 
+		{
+			z = minScene.z;
+			for (int iz = 0; iz < sideCount; z += dz, iz++)
+			{
+				Voxel* v = new Voxel(MPoint(x,y,z), MPoint(x + dx, y + dy, z + dz) );
+				VoxelDataT vd;
+				vd.v = v;
+				int index = flatten3dCubeIndex(sideCount, ix, iy, iz);
+
+				voxelsData[index] = vd;
+			}
+		}
+	}
+}
+
+void RayTracer::computeVoxelNeighborhoodData()
+{
+	int curntIdx;
+	int xnextIdx;
+	int xprevIdx;
+	int ynextIdx;
+	int yprevIdx;
+	int znextIdx;
+	int zprevIdx;
+
+	int maxIdx = (int) voxelsData.size() - 1;
+	int minIdx = 0;
+	int sideCount = voxelParams.voxelsPerDimension;
+
+	for (int x = 0; x < sideCount; x++)
+	{
+		for (int y = 0; y < sideCount; y++)
+		{
+			for (int z = 0; z < sideCount; z++)
+			{
+				curntIdx = flatten3dCubeIndex(sideCount, x, y, z);
+				xnextIdx = flatten3dCubeIndex(sideCount, x+1, y, z);
+				xprevIdx = flatten3dCubeIndex(sideCount, x-1, y, z);
+				ynextIdx = flatten3dCubeIndex(sideCount, x, y+1, z);
+				yprevIdx = flatten3dCubeIndex(sideCount, x, y-1, z);
+				znextIdx = flatten3dCubeIndex(sideCount, x, y, z+1);
+				zprevIdx = flatten3dCubeIndex(sideCount, x, y, z-1);
+
+				Voxel* curV = voxelsData[curntIdx].v;
+
+				// OMG I hate this
+				if (xnextIdx >= minIdx && xnextIdx <= maxIdx) {
+					curV->xnext = voxelsData[xnextIdx].v;
+				}
+				if (xprevIdx >= minIdx && xprevIdx <= maxIdx) {
+					curV->xprev = voxelsData[xprevIdx].v;
+				}
+
+				if (ynextIdx >= minIdx && ynextIdx <= maxIdx) {
+					curV->ynext = voxelsData[ynextIdx].v;
+				}
+				if (yprevIdx >= minIdx && yprevIdx <= maxIdx) {
+					curV->yprev = voxelsData[yprevIdx].v;
+				}
+
+				if (znextIdx >= minIdx && znextIdx <= maxIdx) {
+					curV->znext = voxelsData[znextIdx].v;
+				}
+				if (zprevIdx >= minIdx && zprevIdx <= maxIdx) {
+					curV->zprev = voxelsData[zprevIdx].v;
+				}
+			}	
+		}
+	}
+}
+
+
+void RayTracer::computeVoxelMeshBboxIntersections()
+{
+	int totalIntersections = 0;
+	for (int v = 0; v < voxelsData.size(); v++)
+	{
+		int count = 0;
+		voxelsData[v].containedMeshIndexes.clear();
+		for (int m = 0; m < meshesData.size(); m++)
+		{
+			if ( voxelsData[v].v->intersectsWith(meshesData[m].min, meshesData[m].max) )
+			{
+				voxelsData[v].containedMeshIndexes.push_back(m);
+				count++;
+				totalIntersections++;
+			}
+		}
+		MString out = "Intersections per voxel ";
+		out += pointToString(voxelsData[v].v->min);
+		out += "x";
+		out += pointToString(voxelsData[v].v->max);
+		out += " is ";
+		out += count;
+		PRINT_IN_MAYA( out );
+	}
+	PRINT_IN_MAYA((MString("TOTAL: ") + totalIntersections));
 }

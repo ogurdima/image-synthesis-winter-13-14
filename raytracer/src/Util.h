@@ -36,6 +36,7 @@ namespace util
 	inline double					maximize(double* oldPtr, double newVal);
 
 	bool							intervalsOverlap(double x1, double y1, double x2, double y2);
+	int								flatten3dCubeIndex(int dimSize, int x, int y, int z);
 
 };
 
