@@ -16,7 +16,13 @@ public:
 
 	MPoint		min;
 	MPoint		max;
-	vector<int> meshIdx;
+
+	Voxel*		xnext;
+	Voxel*		xprev;
+	Voxel*		ynext;
+	Voxel*		yprev;
+	Voxel*		znext;
+	Voxel*		zprev;
 
 	bool intersectsWith(MPoint otherMin, MPoint otherMax);
 	bool intersectsWith(MDagPath meshPath, MPoint& intersectionPoint);

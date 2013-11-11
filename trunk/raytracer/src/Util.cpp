@@ -159,4 +159,11 @@ namespace util
 		}
 
 	}
+
+	int	flatten3dCubeIndex(int dimSize, int x, int y, int z)
+	{
+		return x + dimSize*y + dimSize*dimSize*z;
+	}
+
+
 }

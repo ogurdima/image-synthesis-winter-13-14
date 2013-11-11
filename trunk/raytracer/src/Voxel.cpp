@@ -1,11 +1,16 @@
 #include "Voxel.h"
 
 
-Voxel::Voxel(MPoint _min, MPoint _max)
+Voxel::Voxel(MPoint _min, MPoint _max):
+xnext(NULL),
+xprev(NULL),
+ynext(NULL),
+yprev(NULL),
+znext(NULL),
+zprev(NULL)
 {
 	min = _min;
 	max = _max;
-	meshIdx.clear();
 }
 
 
