@@ -172,6 +172,9 @@ public:
 	void computeVoxelMeshBboxIntersections();
 	void bresenhaim();
 	bool findStartingVoxelIndeces(const MVector& rayDirection, int& bx, int& by, int& bz);
+
+	bool findIndecesByDimension(const MPoint& point, AxisDirection direction,  int& x, int& y, int& z );
+
 	void foo( AxisDirection direction, MPoint closestIntersection, int * bx, int * by, int * bz );
 	void initIndeces( AxisDirection direction, int& x, int& y, int& z );
 	void orthonormalDirections( AxisDirection direction, AxisDirection& uDirection, AxisDirection& vDirection );

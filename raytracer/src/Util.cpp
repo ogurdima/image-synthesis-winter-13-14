@@ -85,7 +85,7 @@ namespace util
 
 		MPointArray pts;
 		MPoint min = MPoint( DBL_MAX ,DBL_MAX, DBL_MAX);
-		MPoint max = MPoint( DBL_MIN ,DBL_MIN, DBL_MIN);
+		MPoint max = MPoint( -DBL_MAX ,-DBL_MAX, -DBL_MAX);
 		mesh.getPoints(pts, MSpace::kWorld);
 		for(int pi = pts.length() - 1; pi >= 0; --pi)
 		{
@@ -115,7 +115,7 @@ namespace util
 	double maximize(double* oldPtr, double newVal)
 	{
 		if (oldPtr == NULL) {
-			return DBL_MIN;
+			return -DBL_MAX;
 		}
 		if (*oldPtr < newVal) {
 			*oldPtr = newVal;

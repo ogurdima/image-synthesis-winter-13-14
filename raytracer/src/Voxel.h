@@ -26,5 +26,6 @@ public:
 
 	bool		intersectsWith(MPoint otherMin, MPoint otherMax);
 	bool		intersectsWith(MDagPath meshPath, MPoint& intersectionPoint);
+	bool		intersectionsWithRay(const MPoint& src, const MVector& dir, MPoint & nearInt, AxisDirection& nearDir, MPoint farInt, AxisDirection& farDir);
 };
 
