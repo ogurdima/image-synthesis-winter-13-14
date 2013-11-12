@@ -18,6 +18,7 @@
 #include <maya/MFnLight.h>
 #include <maya/M3dView.h>
 #include <maya/MImage.h>
+#include "Definitions.h"
 
 
 using std::vector;
@@ -25,8 +26,12 @@ using std::string;
 using std::ostringstream;
 using std::pair;
 
+const double					DOUBLE_NUMERICAL_THRESHHOLD = 0.0000001;
+
 namespace util
 {
+	
+
 	MString							pointToString(MPoint p);
 	MString							vectorToString(MVector p);
 	MString							colorToString(MColor c);
@@ -35,8 +40,11 @@ namespace util
 	inline double					minimize(double* oldPtr, double newVal);
 	inline double					maximize(double* oldPtr, double newVal);
 
+	bool							valueInInterval(double value, double intervalMin, double intervalMax);
 	bool							intervalsOverlap(double x1, double y1, double x2, double y2);
 	int								flatten3dCubeIndex(int dimSize, int x, int y, int z);
-
+	bool							pointInRectangle(AxisDirection projectionDirection, const MPoint point, const MPoint minPoint, const MPoint maxPoint );
+	bool							isPointInVolume(const MPoint& point, const MPoint& minVolume, const MPoint& maxVolume);
+	
 };
 

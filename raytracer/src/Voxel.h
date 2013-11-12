@@ -24,7 +24,7 @@ public:
 	Voxel*		znext;
 	Voxel*		zprev;
 
-	bool intersectsWith(MPoint otherMin, MPoint otherMax);
-	bool intersectsWith(MDagPath meshPath, MPoint& intersectionPoint);
+	bool		intersectsWith(MPoint otherMin, MPoint otherMax);
+	bool		intersectsWith(MDagPath meshPath, MPoint& intersectionPoint);
 };
 
