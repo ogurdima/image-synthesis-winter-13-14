@@ -144,20 +144,11 @@ namespace util
 			r2 = x2;
 		}
 
-		if (l1 < l2) {
-			if (r1 < l2) {
-				return false;
-			}
-			return true;
-		}
 
-		if (l2 < l1) {
-			if (r2 < l1) {
-				return false;
-			}
-			return true;
+		if (r1 < (l2 - DOUBLE_NUMERICAL_THRESHHOLD) || r2 < (l1 - DOUBLE_NUMERICAL_THRESHHOLD)) {
+			return false;
 		}
-
+		return true;			
 	}
 
 	int	flatten3dCubeIndex(int dimSize, int x, int y, int z)
@@ -165,5 +156,38 @@ namespace util
 		return x + dimSize*y + dimSize*dimSize*z;
 	}
 
+	bool isPointInVolume(const MPoint& point, const MPoint& minVolume, const MPoint& maxVolume)
+	{
+		for(int i = 0; i < 3; ++i)
+		{
+			if( point[i] < minVolume[i] || point[i] > maxVolume[i])
+				return false;
+		}
+		return true;
+	}
+
+	bool valueInInterval( double value, double intervalMin, double intervalMax )
+	{
+		return !( value < intervalMin || value > intervalMax);
+	}
+
+	bool pointInRectangle( AxisDirection projectionDirection, const MPoint point, const MPoint minPoint, const MPoint maxPoint )
+	{
+		switch (projectionDirection)
+		{
+		case X_NEG:
+		case X_POS:
+			return valueInInterval(point.y, minPoint.y, maxPoint.y) && valueInInterval(point.z, minPoint.z, maxPoint.z);
+		case Y_NEG:
+		case Y_POS:
+			return valueInInterval(point.x, minPoint.x, maxPoint.x) && valueInInterval(point.z, minPoint.z, maxPoint.z);
+		case Z_NEG:
+		case Z_POS:
+			return valueInInterval(point.y, minPoint.y, maxPoint.y) && valueInInterval(point.x, minPoint.x, maxPoint.x);
+		default:
+			break;
+		}
+		return false;
+	}
 
 }

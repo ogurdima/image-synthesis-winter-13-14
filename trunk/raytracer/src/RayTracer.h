@@ -26,6 +26,8 @@
 #include <vector>
 #include <string>
 #include <sstream>
+#include "Plane.h"
+#include "Definitions.h"
 
 #include "Util.h"
 #include "Voxel.h"
@@ -41,16 +43,25 @@ using namespace util;
 class RayTracer : public MPxCommand
 {
 
+
+
 	MPoint minScene;
 	MPoint maxScene;
-
-	MVector eyePosition;
-	MFloatVector ** rayDirections;
+	vector<Plane> sceneBBPlanes;
 
 
 	int imgWidth;
 	int imgHeight;
 
+	bool cameraInSceneBB;
+	int initCameraVoxelX;
+	int initCameraVoxelY;
+	int initCameraVoxelZ;
+
+
+	
+
+	
 
 	struct CameraDataT
 	{
@@ -145,19 +156,7 @@ public:
 	virtual MStatus doIt(const MArgList& argList);
 	static void* creator();
 
-
-	void printMeshPoints();
-	void printCamerasInfo();
-	void printObjectTypesInScene2();
-	void printObjectTypesInScene();
-	MPoint getObjectSpaceCentroid(MObject obj);
-	void getCameraInfo();
-	void goOverRays();
-	void calculateSceneBoundingBox();
-	
-
-
-
+	void triangulateMesh(const MFnMesh& mesh);
 	void storeActiveCameraData();
 	void computeAndStoreImagePlaneData();
 	void storeLightingData();
@@ -171,7 +170,11 @@ public:
 	void computeAndStoreRawVoxelsData();
 	void computeVoxelNeighborhoodData();
 	void computeVoxelMeshBboxIntersections();
-
-
-
+	void bresenhaim();
+	bool findStartingVoxelIndeces(const MVector& rayDirection, int& bx, int& by, int& bz);
+	void foo( AxisDirection direction, MPoint closestIntersection, int * bx, int * by, int * bz );
+	void initIndeces( AxisDirection direction, int& x, int& y, int& z );
+	void orthonormalDirections( AxisDirection direction, AxisDirection& uDirection, AxisDirection& vDirection );
+	bool pointInVoxelByDirection( const MPoint& closestIntersection,VoxelDataT voxel, AxisDirection uDirection );
+	void incrementIndeces( AxisDirection uDirection, int& x, int& y, int& z );
 };
