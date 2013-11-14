@@ -1,17 +1,13 @@
 #include "Voxel.h"
 #include "Plane.h"
+#include <maya/MItMeshPolygon.h>
+#include "Profiler.h"
 
-
-Voxel::Voxel(MPoint _min, MPoint _max):
-xnext(NULL),
-xprev(NULL),
-ynext(NULL),
-yprev(NULL),
-znext(NULL),
-zprev(NULL)
+Voxel::Voxel(MPoint _min, MPoint _max)
 {
 	min = _min;
 	max = _max;
+	center = (min + max) / 2;
 }
 
 
@@ -26,10 +22,25 @@ bool Voxel::intersectsWith(MPoint otherMin, MPoint otherMax)
 	return false;
 }
 
-// TODO: Implement this
-bool Voxel::intersectsWith(MDagPath meshPath, MPoint& intersectionPoint)
+
+bool Voxel::intersectsWith(const MDagPath& meshPath, const double halfsSides[3], vector<int>& faceIds) const
 {
-	return false;
+	
+	MItMeshPolygon faceIt(meshPath);
+
+	MPointArray ptsArray;
+	MIntArray vertexList;
+	MPoint pts[3];
+	for (;!faceIt.isDone();faceIt.next())
+	{
+		faceIt.getTriangles(ptsArray,vertexList,MSpace::kWorld);
+		if(triangleBoxOverlap(center, halfsSides, ptsArray))
+		{
+			faceIds.push_back(faceIt.index());
+		}
+	}
+	
+	return !faceIds.empty();
 }
 
 Voxel::~Voxel(void)

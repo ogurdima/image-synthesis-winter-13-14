@@ -115,6 +115,7 @@ if EXIST "$(MAYA_APP_DIR)\2014-x64\plugins$(TargetFileName)" (
     <ClCompile Include="..\src\pluginMain.cpp" />
     <ClCompile Include="..\src\RayTracer.cpp" />
     <ClCompile Include="..\src\Util.cpp" />
+    <ClCompile Include="..\src\Profiler.cpp" />
     <ClCompile Include="..\src\Voxel.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -122,6 +123,7 @@ if EXIST "$(MAYA_APP_DIR)\2014-x64\plugins$(TargetFileName)" (
     <ClInclude Include="..\src\Plane.h" />
     <ClInclude Include="..\src\RayTracer.h" />
     <ClInclude Include="..\src\Util.h" />
+    <ClInclude Include="..\src\Profiler.h" />
     <ClInclude Include="..\src\Voxel.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
