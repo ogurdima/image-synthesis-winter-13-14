@@ -1,6 +1,6 @@
 #include "RayTracer.h"
 
-
+#include "Profiler.h"
 
 #define PRINT_IN_MAYA(arg) MGlobal::displayInfo((arg)); 
 
@@ -9,6 +9,7 @@ MStatus RayTracer::doIt(const MArgList& argList)
 {
 	cout << "Running raytracer plugin..." << endl;
 	MGlobal::displayInfo("Running raytracer plugin...");
+	Profiler::clear();
 
 	storeActiveCameraData();
 	computeAndStoreImagePlaneData();
@@ -18,6 +19,7 @@ MStatus RayTracer::doIt(const MArgList& argList)
 	voxelizeScene();
 	bresenhaim();
 
+	Profiler::printReport();
 	MGlobal::displayInfo("Raytracer plugin run finished!");
 	cout << "Raytracer plugin run finished!" << endl;  
 	return MS::kSuccess;
@@ -29,7 +31,7 @@ RayTracer::RayTracer()
 	imgHeight = 480;
 	minScene = MPoint( DBL_MAX ,DBL_MAX,DBL_MAX);
 	maxScene = MPoint(-DBL_MAX, -DBL_MAX, -DBL_MAX);
-	voxelParams.voxelsPerDimension = 50;
+	voxelParams.voxelsPerDimension = 5;
 
 	meshesData.clear();
 	lightingData.clear();
@@ -282,7 +284,7 @@ void RayTracer::voxelizeScene()
 {
 	computeAndStoreVoxelParams();
 	computeAndStoreRawVoxelsData();
-	computeVoxelNeighborhoodData();
+	//computeVoxelNeighborhoodData();
 	computeVoxelMeshBboxIntersections();
 }
 
@@ -296,11 +298,15 @@ void RayTracer::computeAndStoreVoxelParams()
 	//maximize(&sceneSpanY, 1); // to avoid zero voxel size in case of a flat scene
 	//maximize(&sceneSpanZ, 1); // to avoid zero voxel size in case of a flat scene
 
-	voxelParams.dx = sceneSpanX / voxelParams.voxelsPerDimension;
-	voxelParams.dy = sceneSpanY / voxelParams.voxelsPerDimension;
-	voxelParams.dz = sceneSpanZ / voxelParams.voxelsPerDimension;
+	voxelParams.dimensionDeltas[0] = sceneSpanX / voxelParams.voxelsPerDimension;
+	voxelParams.dimensionDeltas[1] = sceneSpanY / voxelParams.voxelsPerDimension;
+	voxelParams.dimensionDeltas[2] = sceneSpanZ / voxelParams.voxelsPerDimension;
 
-	PRINT_IN_MAYA((MString("Voxel size: ") + pointToString(MPoint(voxelParams.dx, voxelParams.dy, voxelParams.dz))));
+	voxelParams.dimensionDeltaHalfs[0] = voxelParams.dimensionDeltas[0] / 2;
+	voxelParams.dimensionDeltaHalfs[1] = voxelParams.dimensionDeltas[1] / 2;
+	voxelParams.dimensionDeltaHalfs[2] = voxelParams.dimensionDeltas[2] / 2;
+
+	//PRINT_IN_MAYA((MString("Voxel size: ") + pointToString(MPoint(voxelParams.dx, voxelParams.dy, voxelParams.dz))));
 
 }
 
@@ -318,9 +324,9 @@ void RayTracer::computeAndStoreRawVoxelsData()
 	voxelsData.resize(maxIdx + 1);
 
 
-	double dx = voxelParams.dx;
-	double dy = voxelParams.dy;
-	double dz = voxelParams.dz;
+	double dx = voxelParams.dimensionDeltas[0];
+	double dy = voxelParams.dimensionDeltas[1];
+	double dz = voxelParams.dimensionDeltas[2];
 
 	double x = minScene.x;
 	double y = minScene.y;
@@ -343,7 +349,7 @@ void RayTracer::computeAndStoreRawVoxelsData()
 				vd.v = v;
 				int index = flatten3dCubeIndex(sideCount, ix, iy, iz);
 
-				if(cameraInSceneBB && isPointInVolume(activeCameraData.eye, v->min, v->max))
+				if(cameraInSceneBB && isPointInVolume(activeCameraData.eye, v->Min(), v->Max()))
 				{
 					initCameraVoxelX = ix;
 					initCameraVoxelY = iy;
@@ -358,58 +364,58 @@ void RayTracer::computeAndStoreRawVoxelsData()
 
 void RayTracer::computeVoxelNeighborhoodData()
 {
-	int curntIdx;
-	int xnextIdx;
-	int xprevIdx;
-	int ynextIdx;
-	int yprevIdx;
-	int znextIdx;
-	int zprevIdx;
+	//int curntIdx;
+	//int xnextIdx;
+	//int xprevIdx;
+	//int ynextIdx;
+	//int yprevIdx;
+	//int znextIdx;
+	//int zprevIdx;
 
-	int maxIdx = (int) voxelsData.size() - 1;
-	int minIdx = 0;
-	int sideCount = voxelParams.voxelsPerDimension;
+	//int maxIdx = (int) voxelsData.size() - 1;
+	//int minIdx = 0;
+	//int sideCount = voxelParams.voxelsPerDimension;
 
-	for (int x = 0; x < sideCount; x++)
-	{
-		for (int y = 0; y < sideCount; y++)
-		{
-			for (int z = 0; z < sideCount; z++)
-			{
-				curntIdx = flatten3dCubeIndex(sideCount, x, y, z);
-				xnextIdx = flatten3dCubeIndex(sideCount, x+1, y, z);
-				xprevIdx = flatten3dCubeIndex(sideCount, x-1, y, z);
-				ynextIdx = flatten3dCubeIndex(sideCount, x, y+1, z);
-				yprevIdx = flatten3dCubeIndex(sideCount, x, y-1, z);
-				znextIdx = flatten3dCubeIndex(sideCount, x, y, z+1);
-				zprevIdx = flatten3dCubeIndex(sideCount, x, y, z-1);
+	//for (int x = 0; x < sideCount; x++)
+	//{
+	//	for (int y = 0; y < sideCount; y++)
+	//	{
+	//		for (int z = 0; z < sideCount; z++)
+	//		{
+	//			curntIdx = flatten3dCubeIndex(sideCount, x, y, z);
+	//			xnextIdx = flatten3dCubeIndex(sideCount, x+1, y, z);
+	//			xprevIdx = flatten3dCubeIndex(sideCount, x-1, y, z);
+	//			ynextIdx = flatten3dCubeIndex(sideCount, x, y+1, z);
+	//			yprevIdx = flatten3dCubeIndex(sideCount, x, y-1, z);
+	//			znextIdx = flatten3dCubeIndex(sideCount, x, y, z+1);
+	//			zprevIdx = flatten3dCubeIndex(sideCount, x, y, z-1);
 
-				Voxel* curV = voxelsData[curntIdx].v;
+	//			Voxel* curV = voxelsData[curntIdx].v;
 
-				// OMG I hate this
-				if (xnextIdx >= minIdx && xnextIdx <= maxIdx) {
-					curV->xnext = voxelsData[xnextIdx].v;
-				}
-				if (xprevIdx >= minIdx && xprevIdx <= maxIdx) {
-					curV->xprev = voxelsData[xprevIdx].v;
-				}
+	//			// OMG I hate this
+	//			if (xnextIdx >= minIdx && xnextIdx <= maxIdx) {
+	//				curV->xnext = voxelsData[xnextIdx].v;
+	//			}
+	//			if (xprevIdx >= minIdx && xprevIdx <= maxIdx) {
+	//				curV->xprev = voxelsData[xprevIdx].v;
+	//			}
 
-				if (ynextIdx >= minIdx && ynextIdx <= maxIdx) {
-					curV->ynext = voxelsData[ynextIdx].v;
-				}
-				if (yprevIdx >= minIdx && yprevIdx <= maxIdx) {
-					curV->yprev = voxelsData[yprevIdx].v;
-				}
+	//			if (ynextIdx >= minIdx && ynextIdx <= maxIdx) {
+	//				curV->ynext = voxelsData[ynextIdx].v;
+	//			}
+	//			if (yprevIdx >= minIdx && yprevIdx <= maxIdx) {
+	//				curV->yprev = voxelsData[yprevIdx].v;
+	//			}
 
-				if (znextIdx >= minIdx && znextIdx <= maxIdx) {
-					curV->znext = voxelsData[znextIdx].v;
-				}
-				if (zprevIdx >= minIdx && zprevIdx <= maxIdx) {
-					curV->zprev = voxelsData[zprevIdx].v;
-				}
-			}	
-		}
-	}
+	//			if (znextIdx >= minIdx && znextIdx <= maxIdx) {
+	//				curV->znext = voxelsData[znextIdx].v;
+	//			}
+	//			if (zprevIdx >= minIdx && zprevIdx <= maxIdx) {
+	//				curV->zprev = voxelsData[zprevIdx].v;
+	//			}
+	//		}	
+	//	}
+	//}
 }
 
 void RayTracer::computeVoxelMeshBboxIntersections()
@@ -423,11 +429,16 @@ void RayTracer::computeVoxelMeshBboxIntersections()
 		{
 			if ( voxelsData[v].v->intersectsWith(meshesData[m].min, meshesData[m].max) )
 			{
+				vector<int> faceIds;
+				if( voxelsData[v].v->intersectsWith(meshesData[m].dagPath, voxelParams.dimensionDeltaHalfs, faceIds))
+				{
+					voxelsData[v].meshIdToFaceIds[m] = faceIds;
+				}
 				voxelsData[v].containedMeshIndexes.push_back(m);
 				count++;
 				totalIntersections++;
 			}
-		} 
+		}
 		/*MString out = "Intersections per voxel ";
 		out += pointToString(voxelsData[v].v->min);
 		out += "x";
@@ -451,44 +462,30 @@ void RayTracer::bresenhaim()
 	int dimension = voxelParams.voxelsPerDimension;
 	MPoint raySource = activeCameraData.eye;
 
+
 	for( int h = 0; h < imgHeight; ++h )
 	{
 		for(int w = 0; w < imgWidth; ++w )
 		{
+			Profiler::startTimer("onePixel");
 			int x, y, z;
+			
 			MVector rayDirection = lbPixelCenter + ( h * dy ) + (w * dx) - activeCameraData.eye;
-
 			rayDirection.normalize();
 
-			if(!findStartingVoxelIndeces(rayDirection, x, y, z))
+			
+			bool res = findStartingVoxelIndeces(rayDirection, x, y, z);
+			if(!res)
 			{
 				continue;
 			}
 
-			while(x >= 0 && x < dimension && y >= 0 && y < dimension && z >= 0 && z < dimension)
-			{
-				VoxelDataT vData = voxelsData[flatten3dCubeIndex(dimension, x, y, z)];
-				MPoint nearInt, farInt;
-				AxisDirection nearDir, farDir;
-				if(!vData.v->intersectionsWithRay(raySource, rayDirection, nearInt, nearDir, farInt, farDir))
-				{
-					break;
-				}
-
-				if(vData.containedMeshIndexes.size() > 0)
-				{
-					pixels[h*imgWidth*4 + w*4] = 255;
-					pixels[h*imgWidth*4 + w*4 + 1] = 255;
-					pixels[h*imgWidth*4 + w*4 + 2] = 255;
-					break;
-				}
-
-				incrementIndeces(farDir, x, y, z);
-			}
+			
+			shootRay(dimension, x, y, z, raySource, rayDirection, pixels, h, w);
+			Profiler::finishTimer("onePixel");
 
 		}
 	}
-
 	MImage img;
 	img.setPixels(pixels,imgWidth,imgHeight);
 	img.writeToFile("C://temp//scene.iff");
@@ -498,6 +495,7 @@ void RayTracer::bresenhaim()
 
 bool RayTracer::findStartingVoxelIndeces(const MVector& rayDirection, int& x, int& y, int& z)
 {
+	
 	if(cameraInSceneBB)
 	{
 		x = initCameraVoxelX;
@@ -607,11 +605,11 @@ inline bool RayTracer::pointInVoxelByDirection( const MPoint& closestIntersectio
 	switch (direction)
 	{
 	case X_POS:
-		return valueInInterval(closestIntersection.x, voxel.v->min.x, voxel.v->max.x);
+		return valueInInterval(closestIntersection.x, voxel.v->Min().x, voxel.v->Max().x);
 	case Y_POS:
-		return valueInInterval(closestIntersection.y, voxel.v->min.y, voxel.v->max.y);
+		return valueInInterval(closestIntersection.y, voxel.v->Min().y, voxel.v->Max().y);
 	case Z_POS:
-		return valueInInterval(closestIntersection.z, voxel.v->min.z, voxel.v->max.z);
+		return valueInInterval(closestIntersection.z, voxel.v->Min().z, voxel.v->Max().z);
 	default:
 		return false;
 	}
@@ -643,6 +641,82 @@ void RayTracer::incrementIndeces( AxisDirection uDirection, int& x, int& y, int&
 	default:
 		break;
 	}
+}
+
+void RayTracer::shootRay(int dimension, int x, int y, int z, MPoint raySource, MVector rayDirection, unsigned char* pixels, int h, int w )
+{
+	MPoint nearInt, farInt;
+	AxisDirection nearAxisDir, farAxisDir;
+	VoxelDataT voxelData;
+	MIntArray vertexIds;
+	MPoint triangleVertices[3];
+	int meshID;
+	double minTime, time;
+	MPoint minIntersection, intersection;
+	int meshWithMinIntersection(-1);
+	int meshFaceIdOfMinIntersection;
+
+	for(;x >= 0 && x < dimension && y >= 0 && y < dimension && z >= 0 && z < dimension; incrementIndeces(farAxisDir, x, y, z))
+	{
+		voxelData = voxelsData[flatten3dCubeIndex(dimension, x, y, z)];
+		
+		if(!voxelData.v->intersectionsWithRay(raySource, rayDirection, nearInt, nearAxisDir, farInt, farAxisDir))
+		{
+			break;
+		}
+
+		if(voxelData.meshIdToFaceIds.size() == 0)
+		{
+			continue;
+		}
+
+		minTime = DBL_MAX;
+		for(map<int, vector<int>>::iterator it = voxelData.meshIdToFaceIds.begin(); it != voxelData.meshIdToFaceIds.end(); ++it )
+		{
+			meshID = it->first;
+
+			MFnMesh mesh(meshesData[it->first].dagPath);
+			vector<int>& faceIds = it->second;
+			for(int faceId = faceIds.size() - 1; faceId >= 0; --faceId)
+			{
+				mesh.getPolygonVertices(faceIds[faceId], vertexIds);
+				if(vertexIds.length() != 3)
+				{
+					continue;
+				}
+				for (int vi = 0; vi < 3; ++vi)
+				{
+					mesh.getPoint(vertexIds[vi], triangleVertices[vi], MSpace::kWorld);
+				}
+				if(!rayIntersectsTriangle(raySource, rayDirection, triangleVertices, time, intersection))
+				{
+					continue;
+				}
+
+				if(time < minTime)
+				{
+					minTime = time;
+					minIntersection = intersection;
+					meshWithMinIntersection = meshID;
+					meshFaceIdOfMinIntersection = faceId;
+				}
+			}
+		}
+
+		if(meshWithMinIntersection == -1)
+		{
+			continue;
+		}
+
+		pixels[h*imgWidth*4 + w*4] = (255/ (meshWithMinIntersection + 1));
+		pixels[h*imgWidth*4 + w*4 + 1] = 255;
+		pixels[h*imgWidth*4 + w*4 + 2] = 255;
+		return;
+	}
+
+	pixels[h*imgWidth*4 + w*4] = 0;
+	pixels[h*imgWidth*4 + w*4 + 1] = 125;
+	pixels[h*imgWidth*4 + w*4 + 2] = 0;
 }
 
 

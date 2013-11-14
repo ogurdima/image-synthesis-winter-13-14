@@ -10,22 +10,26 @@ using namespace util;
 
 class Voxel
 {
+	MPoint		min;
+	MPoint		max;
+	MPoint		center;
+
 public:
 	Voxel(MPoint _min, MPoint _max);
 	~Voxel(void);
 
-	MPoint		min;
-	MPoint		max;
+	inline MPoint Min()
+	{
+		return min;
+	}
 
-	Voxel*		xnext;
-	Voxel*		xprev;
-	Voxel*		ynext;
-	Voxel*		yprev;
-	Voxel*		znext;
-	Voxel*		zprev;
+	inline MPoint Max()
+	{
+		return max;
+	}
 
 	bool		intersectsWith(MPoint otherMin, MPoint otherMax);
-	bool		intersectsWith(MDagPath meshPath, MPoint& intersectionPoint);
+	bool		intersectsWith(const MDagPath& meshPath,const double halfsSides[3], vector<int>& faceIds) const;
 	bool		intersectionsWithRay(const MPoint& src, const MVector& dir, MPoint & nearInt, AxisDirection& nearDir, MPoint farInt, AxisDirection& farDir);
 };
 

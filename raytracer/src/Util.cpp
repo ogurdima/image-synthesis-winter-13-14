@@ -1,5 +1,8 @@
 #include "Util.h"
 
+#include <math.h>
+#include <stdio.h>
+
 namespace util 
 {
 	MString pointToString(MPoint p)
@@ -188,6 +191,264 @@ namespace util
 			break;
 		}
 		return false;
+	}
+
+
+#define X 0
+#define Y 1
+#define Z 2
+
+#define CROSS(dest,v1,v2) \
+	dest[0]=v1[1]*v2[2]-v1[2]*v2[1]; \
+	dest[1]=v1[2]*v2[0]-v1[0]*v2[2]; \
+	dest[2]=v1[0]*v2[1]-v1[1]*v2[0]; 
+
+#define DOT(v1,v2) (v1[0]*v2[0]+v1[1]*v2[1]+v1[2]*v2[2])
+
+#define SUB(dest,v1,v2) \
+	dest[0]=v1[0]-v2[0]; \
+	dest[1]=v1[1]-v2[1]; \
+	dest[2]=v1[2]-v2[2]; 
+
+#define FINDMINMAX(x0,x1,x2,minVal,maxVal) \
+	minVal = maxVal = x0;   \
+	if(x1<minVal) minVal=x1;\
+	if(x1>maxVal) maxVal=x1;\
+	if(x2<minVal) minVal=x2;\
+	if(x2>maxVal) maxVal=x2;
+
+
+	inline bool planeBoxOverlap(const MVector normal,const MPoint point, const double halfBox[3])	// -NJMP-
+	{
+		int q;
+		double v;
+
+		MPoint vmin, vmax;
+
+		for(q=X;q<=Z;q++)
+		{
+			v=point[q];					// -NJMP-
+			if(normal[q]>0.0f)
+			{
+				vmin[q]=-halfBox[q] - v;	// -NJMP-
+				vmax[q]= halfBox[q] - v;	// -NJMP-
+			}
+			else
+			{
+				vmin[q]= halfBox[q] - v;	// -NJMP-
+				vmax[q]=-halfBox[q] - v;	// -NJMP-
+			}
+		}
+
+		if((normal * vmin) > 0.0f) return false;	// -NJMP-
+		if((normal * vmax) >= 0.0f) return true;	// -NJMP-
+		return false;
+	}
+
+
+
+
+
+	/*======================== X-tests ========================*/
+
+#define AXISTEST_X01(a, b, fa, fb, v0, v2)			   \
+	p0 = a*v0[Y] - b*v0[Z];			       	   \
+	p2 = a*v2[Y] - b*v2[Z];			       	   \
+	if(p0<p2) {minVal=p0; maxVal=p2;} else {minVal=p2; maxVal=p0;} \
+	rad = fa * boxhalfsize[Y] + fb * boxhalfsize[Z];   \
+	if(minVal>rad || maxVal<-rad) return false;
+
+
+#define AXISTEST_X2(a, b, fa, fb, v0, v1)			   \
+	p0 = a*v0[Y] - b*v0[Z];			           \
+	p1 = a*v1[Y] - b*v1[Z];			       	   \
+	if(p0<p1) {minVal=p0; maxVal=p1;} else {minVal=p1; maxVal=p0;} \
+	rad = fa * boxhalfsize[Y] + fb * boxhalfsize[Z];   \
+	if(minVal>rad || maxVal<-rad) return false;
+
+
+
+	/*======================== Y-tests ========================*/
+
+#define AXISTEST_Y02(a, b, fa, fb, v0, v2)			   \
+	p0 = -a*v0[X] + b*v0[Z];		      	   \
+	p2 = -a*v2[X] + b*v2[Z];	       	       	   \
+	if(p0<p2) {minVal=p0; maxVal=p2;} else {minVal=p2; maxVal=p0;} \
+	rad = fa * boxhalfsize[X] + fb * boxhalfsize[Z];   \
+	if(minVal>rad || maxVal<-rad) return false;
+
+
+
+#define AXISTEST_Y1(a, b, fa, fb, v0, v1)			   \
+	p0 = -a*v0[X] + b*v0[Z];		      	   \
+	p1 = -a*v1[X] + b*v1[Z];	     	       	   \
+	if(p0<p1) {minVal=p0; maxVal=p1;} else {minVal=p1; maxVal=p0;} \
+	rad = fa * boxhalfsize[X] + fb * boxhalfsize[Z];   \
+	if(minVal>rad || maxVal<-rad) return false;
+
+
+
+	/*======================== Z-tests ========================*/
+
+
+
+#define AXISTEST_Z12(a, b, fa, fb, v1, v2)			   \
+	p1 = a*v1[X] - b*v1[Y];			           \
+	p2 = a*v2[X] - b*v2[Y];			       	   \
+	if(p2<p1) {minVal=p2; maxVal=p1;} else {minVal=p1; maxVal=p2;} \
+	rad = fa * boxhalfsize[X] + fb * boxhalfsize[Y];   \
+	if(minVal>rad || maxVal<-rad) return false;
+
+
+
+#define AXISTEST_Z0(a, b, fa, fb, v0, v1)			   \
+	p0 = a*v0[X] - b*v0[Y];				   \
+	p1 = a*v1[X] - b*v1[Y];			           \
+	if(p0<p1) {minVal=p0; maxVal=p1;} else {minVal=p1; maxVal=p0;} \
+	rad = fa * boxhalfsize[X] + fb * boxhalfsize[Y];   \
+	if(minVal>rad || maxVal<-rad) return false;
+
+
+
+	bool triangleBoxOverlap( const MPoint center , const double boxhalfsize[3], const MPointArray triangleVertices)
+	{
+		/*    use separating axis theorem to test overlap between triangle and box */
+		/*    need to test for overlap in these directions: */
+		/*    1) the {x,y,z}-directions (actually, since we use the AABB of the triangle */
+		/*       we do not even need to test these) */
+		/*    2) normal of the triangle */
+		/*    3) crossproduct(edge from tri, {x,y,z}-directin) */
+		/*       this gives 3x3=9 more tests */
+		if(triangleVertices.length() != 3)
+			return false;
+
+		MPoint tvs[3];
+		register double minVal,maxVal,p0,p1,p2,rad,fex,fey,fez;		// -NJMP- "d" local variable removed
+		MVector norm, edges[3];
+
+		/* This is the fastest branch on Sun */
+		/* move everything so that the boxcenter is in (0,0,0) */
+
+		tvs[0] = triangleVertices[0] - center;
+		tvs[1] = triangleVertices[1] - center;
+		tvs[2] = triangleVertices[2] - center;
+
+		edges[0] = tvs[1] - tvs[0];
+		edges[1] = tvs[2] - tvs[1];
+		edges[2] = tvs[0] - tvs[2];
+
+		/* Bullet 3:  */
+		/*  test the 9 tests first (this was faster) */
+
+		fex = fabs(edges[0][X]);
+		fey = fabs(edges[0][Y]);
+		fez = fabs(edges[0][Z]);
+
+		AXISTEST_X01(edges[0][Z], edges[0][Y], fez, fey, tvs[0], tvs[2]);
+		AXISTEST_Y02(edges[0][Z], edges[0][X], fez, fex, tvs[0], tvs[2]);
+		AXISTEST_Z12(edges[0][Y], edges[0][X], fey, fex, tvs[1], tvs[2]);
+
+		fex = fabs(edges[1][X]);
+		fey = fabs(edges[1][Y]);
+		fez = fabs(edges[1][Z]);
+
+		AXISTEST_X01(edges[1][Z], edges[1][Y], fez, fey, tvs[0], tvs[2]);
+		AXISTEST_Y02(edges[1][Z], edges[1][X], fez, fex, tvs[0], tvs[2]);
+		AXISTEST_Z0(edges[1][Y], edges[1][X], fey, fex, tvs[0], tvs[1]);
+
+		fex = fabs(edges[2][X]);
+		fey = fabs(edges[2][Y]);
+		fez = fabs(edges[2][Z]);
+
+		AXISTEST_X2(edges[2][Z], edges[2][Y], fez, fey, tvs[0] , tvs[1]);
+		AXISTEST_Y1(edges[2][Z], edges[2][X], fez, fex, tvs[0], tvs[1]);
+		AXISTEST_Z12(edges[2][Y], edges[2][X], fey, fex, tvs[1], tvs[2]);
+
+
+
+		/* Bullet 1: */
+		/*  first test overlap in the {x,y,z}-directions */
+		/*  find minVal, maxVal of the triangle each direction, and test for overlap in */
+		/*  that direction -- this is equivalent to testing a minimal AABB around */
+		/*  the triangle against the AABB */
+
+		/* test in X-direction */
+		FINDMINMAX(tvs[0][X],tvs[1][X],tvs[2][X],minVal,maxVal);
+		if(minVal>boxhalfsize[X] || maxVal<-boxhalfsize[X]) return false;
+
+		/* test in Y-direction */
+		FINDMINMAX(tvs[0][Y],tvs[1][Y],tvs[2][Y],minVal,maxVal);
+		if(minVal>boxhalfsize[Y] || maxVal<-boxhalfsize[Y]) return false;
+
+		/* test in Z-direction */
+		FINDMINMAX(tvs[0][Z],tvs[1][Z],tvs[2][Z],minVal,maxVal);
+		if(minVal>boxhalfsize[Z] || maxVal<-boxhalfsize[Z]) return false;
+
+		/* Bullet 2: */
+		/*  test if the box intersects the plane of the triangle */
+		/*  compute plane equation of triangle: normal*x+d=0 */
+
+		norm = edges[0] ^ edges[1];
+		// -NJMP- (line removed here)
+		if(!planeBoxOverlap(norm, tvs[0], boxhalfsize)) return false;	// -NJMP-
+
+		return true;   /* box and triangle overlaps */
+
+	}
+
+	bool rayIntersectsTriangle(const MPoint raySrc,const MVector rayDirection, const MPoint triangleVertices[3], double& time, MPoint& intersection) 
+	{
+			//float e1[3],e2[3],h[3],s[3],q[3];
+
+			double a,f,u,v;
+
+			MVector edge01(triangleVertices[1] - triangleVertices[0]);
+			MVector edge02(triangleVertices[2] - triangleVertices[0]);
+			//vector(e1,v1,v0);
+			//vector(e2,v2,v0);
+
+			MVector h = rayDirection ^ edge02;
+			a = edge01 * h;
+			//crossProduct(h,d,e2);
+			//a = innerProduct(e1,h);
+
+			if (abs(a) < DOUBLE_NUMERICAL_THRESHHOLD)
+				return(false);
+
+			f = 1/a;
+			//vector(s,p,v0);
+			
+			MVector s = raySrc - triangleVertices[0];
+
+			u = f * (s * h);
+
+			//u = f * (innerProduct(s,h));
+
+			if (u < 0.0 || u > 1.0)
+				return(false);
+
+			MVector q = s ^ edge01;
+			v = f * (rayDirection * q);
+			//crossProduct(q,s,e1);
+			//v = f * innerProduct(d,q);
+
+			if (v < 0.0 || u + v > 1.0)
+				return(false);
+
+			// at this stage we can compute t to find out where
+			// the intersection point is on the line
+			//double t = f * innerProduct(e2,q);
+			time = f * (edge02 * q);
+
+			if (time > DOUBLE_NUMERICAL_THRESHHOLD) // ray intersection
+			{
+				intersection = raySrc + time * rayDirection;
+				return(true);
+			}
+			else // this means that there is a line intersection
+				// but not a ray intersection
+				return (false);
+
 	}
 
 }

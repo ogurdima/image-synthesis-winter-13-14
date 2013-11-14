@@ -45,6 +45,8 @@ namespace util
 	int								flatten3dCubeIndex(int dimSize, int x, int y, int z);
 	bool							pointInRectangle(AxisDirection projectionDirection, const MPoint point, const MPoint minPoint, const MPoint maxPoint );
 	bool							isPointInVolume(const MPoint& point, const MPoint& minVolume, const MPoint& maxVolume);
-	
+	bool							triangleBoxOverlap( const MPoint center , const double boxhalfsize[3], const MPointArray triangleVertices);
+	bool							rayIntersectsTriangle(const MPoint raySrc,const MVector rayDirection, const MPoint triangleVertices[3], double& time, MPoint& intersection);
+
 };
 

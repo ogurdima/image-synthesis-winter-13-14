@@ -23,11 +23,13 @@
 #include <maya/MImage.h>
 #include <maya/MBoundingBox.h>
 #include <maya/MSelectionList.h>
+#include <maya/MTimer.h>
 #include <vector>
 #include <string>
 #include <sstream>
 #include "Plane.h"
 #include "Definitions.h"
+#include <map>
 
 #include "Util.h"
 #include "Voxel.h"
@@ -37,6 +39,7 @@ using std::vector;
 using std::string;
 using std::ostringstream;
 using std::pair;
+using std::map;
 
 using namespace util;
 
@@ -131,12 +134,20 @@ class RayTracer : public MPxCommand
 
 	struct VoxelezationParamT
 	{
-		double		dx;
-		double		dy;
-		double		dz;
+		//double		dx;
+		//double		dy;
+		//double		dz;
+
+		double dimensionDeltaHalfs[3];
+		double dimensionDeltas[3];
+
 		int			voxelsPerDimension;
 
-		VoxelezationParamT() : voxelsPerDimension(1), dx(1), dy(1), dz(1) {}
+		VoxelezationParamT() : voxelsPerDimension(1)
+		{
+			dimensionDeltaHalfs[0] = dimensionDeltaHalfs[1] = dimensionDeltaHalfs[2] = 0.5;
+			dimensionDeltas[0] = dimensionDeltas[1] = dimensionDeltas[2] = 1;
+		}
 
 	} voxelParams;
 
@@ -144,6 +155,8 @@ class RayTracer : public MPxCommand
 	{
 		Voxel* v;
 		vector<int> containedMeshIndexes;
+		map<int, vector<int>> meshIdToFaceIds;
+		
 	};
 
 	vector<VoxelDataT> voxelsData;
@@ -171,6 +184,9 @@ public:
 	void computeVoxelNeighborhoodData();
 	void computeVoxelMeshBboxIntersections();
 	void bresenhaim();
+
+	void shootRay(int dimension, int x, int y, int z, MPoint raySource, MVector rayDirection, unsigned char* pixels, int h, int w );
+
 	bool findStartingVoxelIndeces(const MVector& rayDirection, int& bx, int& by, int& bz);
 
 	bool findIndecesByDimension(const MPoint& point, AxisDirection direction,  int& x, int& y, int& z );
