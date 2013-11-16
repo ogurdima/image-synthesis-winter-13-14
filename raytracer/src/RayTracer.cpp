@@ -27,11 +27,11 @@ MStatus RayTracer::doIt(const MArgList& argList)
 
 RayTracer::RayTracer() 
 {
-	imgWidth  = 640;
-	imgHeight = 480;
+	imgWidth  = 1920;
+	imgHeight = 1080;
 	minScene = MPoint( DBL_MAX ,DBL_MAX,DBL_MAX);
 	maxScene = MPoint(-DBL_MAX, -DBL_MAX, -DBL_MAX);
-	voxelParams.voxelsPerDimension = 5;
+	voxelParams.voxelsPerDimension = 20;
 
 	meshesData.clear();
 	lightingData.clear();
@@ -117,7 +117,7 @@ void RayTracer::computeAndStoreImagePlaneData()
 	double imgAspect = (double)imgWidth / (double)imgHeight;
 	//double pixelWidth = (activeCameraData.filmWidthCm)/(double)imgWidth;
 	//double pixelHeight = pixelWidth / imgAspect;
-	imagePlane.dp = (activeCameraData.filmWidthCm)/(double)imgWidth;
+	imagePlane.dp = (2 * activeCameraData.filmWidthCm)/(double)imgWidth;
 
 	int halfWidth = imgWidth / 2;
 	int halfHeight = imgHeight / 2;
@@ -420,6 +420,12 @@ void RayTracer::computeVoxelNeighborhoodData()
 
 void RayTracer::computeVoxelMeshBboxIntersections()
 {
+	double dimensionDeltaHalfs[3];
+	for (int i = 0; i < 3; ++i)
+	{
+		dimensionDeltaHalfs[i] = voxelParams.dimensionDeltaHalfs[i] + DOUBLE_NUMERICAL_THRESHHOLD;
+	}
+
 	int totalIntersections = 0;
 	for (int v = 0; v < voxelsData.size(); v++)
 	{
@@ -430,7 +436,7 @@ void RayTracer::computeVoxelMeshBboxIntersections()
 			if ( voxelsData[v].v->intersectsWith(meshesData[m].min, meshesData[m].max) )
 			{
 				vector<int> faceIds;
-				if( voxelsData[v].v->intersectsWith(meshesData[m].dagPath, voxelParams.dimensionDeltaHalfs, faceIds))
+				if( voxelsData[v].v->intersectsWith(meshesData[m].dagPath, dimensionDeltaHalfs, faceIds))
 				{
 					voxelsData[v].meshIdToFaceIds[m] = faceIds;
 				}
@@ -477,6 +483,7 @@ void RayTracer::bresenhaim()
 			bool res = findStartingVoxelIndeces(rayDirection, x, y, z);
 			if(!res)
 			{
+				Profiler::finishTimer("onePixel");
 				continue;
 			}
 
@@ -648,75 +655,98 @@ void RayTracer::shootRay(int dimension, int x, int y, int z, MPoint raySource, M
 	MPoint nearInt, farInt;
 	AxisDirection nearAxisDir, farAxisDir;
 	VoxelDataT voxelData;
-	MIntArray vertexIds;
-	MPoint triangleVertices[3];
-	int meshID;
-	double minTime, time;
-	MPoint minIntersection, intersection;
-	int meshWithMinIntersection(-1);
-	int meshFaceIdOfMinIntersection;
-
+	int meshIndex, innerFaceId;
+	MPoint intersection;
+	MColor pixelColor;
 	for(;x >= 0 && x < dimension && y >= 0 && y < dimension && z >= 0 && z < dimension; incrementIndeces(farAxisDir, x, y, z))
 	{
 		voxelData = voxelsData[flatten3dCubeIndex(dimension, x, y, z)];
-		
-		if(!voxelData.v->intersectionsWithRay(raySource, rayDirection, nearInt, nearAxisDir, farInt, farAxisDir))
-		{
-			break;
+		if(!voxelData.v->intersectionsWithRay(raySource, rayDirection, nearInt, nearAxisDir, farInt, farAxisDir)) { 
+			break; 
 		}
-
-		if(voxelData.meshIdToFaceIds.size() == 0)
-		{
+		if(voxelData.meshIdToFaceIds.size() == 0) { 
+			continue; 
+		}
+		if(!closestIntersection(raySource, rayDirection, voxelData, meshIndex, innerFaceId, intersection)) {
 			continue;
 		}
-
-		minTime = DBL_MAX;
-		for(map<int, vector<int>>::iterator it = voxelData.meshIdToFaceIds.begin(); it != voxelData.meshIdToFaceIds.end(); ++it )
-		{
-			meshID = it->first;
-
-			MFnMesh mesh(meshesData[it->first].dagPath);
-			vector<int>& faceIds = it->second;
-			for(int faceId = faceIds.size() - 1; faceId >= 0; --faceId)
-			{
-				mesh.getPolygonVertices(faceIds[faceId], vertexIds);
-				if(vertexIds.length() != 3)
-				{
-					continue;
-				}
-				for (int vi = 0; vi < 3; ++vi)
-				{
-					mesh.getPoint(vertexIds[vi], triangleVertices[vi], MSpace::kWorld);
-				}
-				if(!rayIntersectsTriangle(raySource, rayDirection, triangleVertices, time, intersection))
-				{
-					continue;
-				}
-
-				if(time < minTime)
-				{
-					minTime = time;
-					minIntersection = intersection;
-					meshWithMinIntersection = meshID;
-					meshFaceIdOfMinIntersection = faceId;
-				}
-			}
-		}
-
-		if(meshWithMinIntersection == -1)
-		{
-			continue;
-		}
-
-		pixels[h*imgWidth*4 + w*4] = (255/ (meshWithMinIntersection + 1));
-		pixels[h*imgWidth*4 + w*4 + 1] = 255;
-		pixels[h*imgWidth*4 + w*4 + 2] = 255;
+		pixelColor = calculatePixelColor(rayDirection, meshIndex, innerFaceId, intersection);
+		pixels[h*imgWidth*4 + w*4] = (unsigned char) (pixelColor.r * 255.0);
+		pixels[h*imgWidth*4 + w*4 + 1] = (unsigned char) (pixelColor.g * 255.0);
+		pixels[h*imgWidth*4 + w*4 + 2] = (unsigned char) (pixelColor.b * 255.0);
 		return;
 	}
 
 	pixels[h*imgWidth*4 + w*4] = 0;
 	pixels[h*imgWidth*4 + w*4 + 1] = 125;
 	pixels[h*imgWidth*4 + w*4 + 2] = 0;
+}
+
+bool RayTracer::closestIntersection( MPoint raySource, MVector rayDirection, VoxelDataT &voxelData, int &meshIndex, int &innerFaceId, MPoint &intersection )
+{
+	bool res = false;
+	double minTime = DBL_MAX;
+	double time;
+	MPoint triangleVertices[3];
+	MIntArray vertexIds;
+	int currentMeshIndex, currentFaceIndex;
+	for(map<int, vector<int>>::iterator it = voxelData.meshIdToFaceIds.begin(); it != voxelData.meshIdToFaceIds.end(); ++it )
+	{
+		currentMeshIndex = it->first;
+		MFnMesh mesh(meshesData[it->first].dagPath);
+		vector<int>& faceIds = it->second;
+		for(currentFaceIndex = faceIds.size() - 1; currentFaceIndex >= 0; --currentFaceIndex)
+		{
+			mesh.getPolygonVertices(faceIds[currentFaceIndex], vertexIds);
+			if(vertexIds.length() != 3) {
+				continue;
+			}
+			for (int vi = 0; vi < 3; ++vi) {
+				mesh.getPoint(vertexIds[vi], triangleVertices[vi], MSpace::kWorld);
+			}
+			if(!rayIntersectsTriangle(raySource, rayDirection, triangleVertices, time, intersection)
+				|| !isPointInVolume(intersection, voxelData.v->Min(), voxelData.v->Max()))
+			{
+				continue;
+			}
+			if(time < minTime) {
+				meshIndex = currentMeshIndex;
+				innerFaceId = currentFaceIndex;
+				minTime = time;
+				res = true;
+			}
+		}
+	}
+	return res;
+}
+
+
+
+MColor RayTracer::calculatePixelColor( MVector rayDirection, int meshIndex, int innerFaceId, MPoint intersection )
+{
+	MColor material( 0.5,0.5,0.5 );
+	MFnMesh mesh(meshesData[meshIndex].dagPath);
+	MIntArray vertexIds;
+	MPoint triangleVertices[3];
+	MVector triangleNormals[3];
+
+	mesh.getPolygonVertices(innerFaceId, vertexIds);
+	if(vertexIds.length() != 3) {
+		return material;
+	}
+	for (int vi = 0; vi < 3; ++vi) {
+		mesh.getPoint(vertexIds[vi], triangleVertices[vi], MSpace::kWorld);
+		mesh.getVertexNormal(vertexIds[vi], false, triangleNormals[vi], MSpace::kWorld );
+		triangleNormals[vi].normalize();
+	}
+
+	double u,v,w;
+
+	caclulateBaricentricCoordinates(triangleVertices, intersection, u, v, w);
+
+	MVector normalAtPoint = (u * triangleNormals[0] + v * triangleNormals[1] + w * triangleNormals[2]).normal();
+
+
 }
 
 

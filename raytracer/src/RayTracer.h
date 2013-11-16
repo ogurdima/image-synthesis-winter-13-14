@@ -187,13 +187,18 @@ public:
 
 	void shootRay(int dimension, int x, int y, int z, MPoint raySource, MVector rayDirection, unsigned char* pixels, int h, int w );
 
+	bool closestIntersection( MPoint raySource, MVector rayDirection, VoxelDataT &voxelData, int &meshIndex, int &innerFaceId, MPoint &intersection  );
+
 	bool findStartingVoxelIndeces(const MVector& rayDirection, int& bx, int& by, int& bz);
 
 	bool findIndecesByDimension(const MPoint& point, AxisDirection direction,  int& x, int& y, int& z );
 
-	void foo( AxisDirection direction, MPoint closestIntersection, int * bx, int * by, int * bz );
 	void initIndeces( AxisDirection direction, int& x, int& y, int& z );
 	void orthonormalDirections( AxisDirection direction, AxisDirection& uDirection, AxisDirection& vDirection );
 	bool pointInVoxelByDirection( const MPoint& closestIntersection,VoxelDataT voxel, AxisDirection uDirection );
 	void incrementIndeces( AxisDirection uDirection, int& x, int& y, int& z );
+	
+	MColor calculatePixelColor( MVector rayDirection, int meshIndex, int innerFaceId, MPoint intersection );
+
+
 };
