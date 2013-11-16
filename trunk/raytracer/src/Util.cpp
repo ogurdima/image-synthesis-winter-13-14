@@ -163,7 +163,7 @@ namespace util
 	{
 		for(int i = 0; i < 3; ++i)
 		{
-			if( point[i] < minVolume[i] || point[i] > maxVolume[i])
+			if( point[i] < minVolume[i] - DOUBLE_NUMERICAL_THRESHHOLD || point[i] > maxVolume[i] + DOUBLE_NUMERICAL_THRESHHOLD)
 				return false;
 		}
 		return true;
@@ -449,6 +449,77 @@ namespace util
 				// but not a ray intersection
 				return (false);
 
+	}
+
+	bool rayIntersectsTriangle2(const MPoint raySrc,const MVector rayDirection, const MPoint triangleVertices[3], double& time, MPoint& intersection) 
+	{
+		//float e1[3],e2[3],h[3],s[3],q[3];
+
+		double a,f,u,v;
+
+		MVector edge01(triangleVertices[1] - triangleVertices[0]);
+		MVector edge02(triangleVertices[2] - triangleVertices[0]);
+		//vector(e1,v1,v0);
+		//vector(e2,v2,v0);
+
+		MVector h = rayDirection ^ edge02;
+		a = edge01 * h;
+		//crossProduct(h,d,e2);
+		//a = innerProduct(e1,h);
+
+		if (abs(a) < DOUBLE_NUMERICAL_THRESHHOLD)
+			return(false);
+
+		f = 1/a;
+		//vector(s,p,v0);
+
+		MVector s = raySrc - triangleVertices[0];
+
+		u = f * (s * h);
+
+		//u = f * (innerProduct(s,h));
+
+		if (u < 0.0 || u > 1.0)
+			return(false);
+
+		MVector q = s ^ edge01;
+		v = f * (rayDirection * q);
+		//crossProduct(q,s,e1);
+		//v = f * innerProduct(d,q);
+
+		if (v < 0.0 || u + v > 1.0)
+			return(false);
+
+		// at this stage we can compute t to find out where
+		// the intersection point is on the line
+		//double t = f * innerProduct(e2,q);
+		time = f * (edge02 * q);
+
+		if (time > DOUBLE_NUMERICAL_THRESHHOLD) // ray intersection
+		{
+			intersection = raySrc + time * rayDirection;
+			return(true);
+		}
+		else // this means that there is a line intersection
+			// but not a ray intersection
+			return (false);
+
+	}
+
+	void caclulateBaricentricCoordinates( MPoint triangleVertices[3], MPoint point, double& u, double& v, double& w )
+	{
+		MVector e01 = (triangleVertices[1] - triangleVertices[0]);
+		MVector e02 = (triangleVertices[2] - triangleVertices[0]);
+
+		double triArea = ( e01 ^ e02).length() * 0.5; 
+
+		MVector pv0 = triangleVertices[0] - point;
+		MVector pv1 = triangleVertices[1] - point;
+		MVector pv2 = triangleVertices[2] - point;
+
+		u = ((pv1 ^ pv2).length() * 0.5 ) / triArea;
+		v = ((pv0 ^ pv2).length() * 0.5 ) / triArea;
+		w = ((pv0 ^ pv1).length() * 0.5 ) / triArea;
 	}
 
 }

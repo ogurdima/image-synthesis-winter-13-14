@@ -48,5 +48,7 @@ namespace util
 	bool							triangleBoxOverlap( const MPoint center , const double boxhalfsize[3], const MPointArray triangleVertices);
 	bool							rayIntersectsTriangle(const MPoint raySrc,const MVector rayDirection, const MPoint triangleVertices[3], double& time, MPoint& intersection);
 
+	void caclulateBaricentricCoordinates( MPoint triangleVertices[3], MPoint point, double& u, double& v, double& w );
+
 };
 
