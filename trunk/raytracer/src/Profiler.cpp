@@ -37,8 +37,8 @@ void Profiler::clear()
 }
 
 #ifdef _DEBUG
-;lkajsdf;j;
+
 #else
 	// make sure that all profilers deleted from other places	
-	
+	;lkajsdf;j;
 #endif

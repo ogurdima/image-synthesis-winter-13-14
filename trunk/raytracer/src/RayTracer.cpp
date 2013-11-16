@@ -27,11 +27,11 @@ MStatus RayTracer::doIt(const MArgList& argList)
 
 RayTracer::RayTracer() 
 {
-	imgWidth  = 1920;
-	imgHeight = 1080;
+	imgWidth  = 1280;
+	imgHeight = 960;
 	minScene = MPoint( DBL_MAX ,DBL_MAX,DBL_MAX);
 	maxScene = MPoint(-DBL_MAX, -DBL_MAX, -DBL_MAX);
-	voxelParams.voxelsPerDimension = 20;
+	voxelParams.voxelsPerDimension = 10;
 
 	meshesData.clear();
 	lightingData.clear();
@@ -188,22 +188,27 @@ void RayTracer::storeAmbientLight(MDagPath lightDagPath)
 
 void RayTracer::storeDirectionalLight(MDagPath lightDagPath)
 {
-
 	MStatus status;
 	MFnLight l(lightDagPath);
 	MFloatVector dirFloat = l.lightDirection(lightDagPath.instanceNumber(), MSpace::kWorld, &status);
 	CHECK_MSTATUS(status);
 
+	MVector vecc(0,0,1);
+
+	MVector lightDir(0,0,-1); // origin
+	lightDir *= lightDagPath.inclusiveMatrix();
+	lightDir.normalize();
 	MVector dir;
 	dir.x = (double) dirFloat.x;
 	dir.y = (double) dirFloat.y;
 	dir.z = (double) dirFloat.z;
+	dir.normalize();
 	//PRINT_IN_MAYA(MString("Directional Light in WF:") + vectorToString(dir));
 
 	LightDataT ld;
 	ld.type = LightDataT::DIRECTIONAL;
 	ld.color = l.color();
-	ld.direction = dir;
+	ld.direction = lightDir;
 	lightingData.push_back(ld);
 }
 
@@ -211,10 +216,12 @@ void RayTracer::storePointLight(MDagPath lightDagPath)
 {
 	MStatus status;
 	MFnLight l(lightDagPath);
-	MMatrix transform = getDagPathTransformationMatrix(lightDagPath, &status);
+	MMatrix transform = lightDagPath.inclusiveMatrix();  /*getDagPathTransformationMatrix(lightDagPath, &status);*/
 	CHECK_MSTATUS(status);
 	MPoint pointLightOrigin = MPoint(0,0,0,1);
 	MPoint positionWorldFrame = pointLightOrigin * transform;
+	
+	
 	//PRINT_IN_MAYA(MString("Point Light in WF:") + pointToString(positionWorldFrame));
 
 	LightDataT ld;
@@ -690,12 +697,13 @@ bool RayTracer::closestIntersection( MPoint raySource, MVector rayDirection, Vox
 	MPoint triangleVertices[3];
 	MIntArray vertexIds;
 	int currentMeshIndex, currentFaceIndex;
+	MPoint curIntersection;
 	for(map<int, vector<int>>::iterator it = voxelData.meshIdToFaceIds.begin(); it != voxelData.meshIdToFaceIds.end(); ++it )
 	{
 		currentMeshIndex = it->first;
 		MFnMesh mesh(meshesData[it->first].dagPath);
 		vector<int>& faceIds = it->second;
-		for(currentFaceIndex = faceIds.size() - 1; currentFaceIndex >= 0; --currentFaceIndex)
+		for(currentFaceIndex = (int) faceIds.size() - 1; currentFaceIndex >= 0; --currentFaceIndex)
 		{
 			mesh.getPolygonVertices(faceIds[currentFaceIndex], vertexIds);
 			if(vertexIds.length() != 3) {
@@ -704,14 +712,15 @@ bool RayTracer::closestIntersection( MPoint raySource, MVector rayDirection, Vox
 			for (int vi = 0; vi < 3; ++vi) {
 				mesh.getPoint(vertexIds[vi], triangleVertices[vi], MSpace::kWorld);
 			}
-			if(!rayIntersectsTriangle(raySource, rayDirection, triangleVertices, time, intersection)
-				|| !isPointInVolume(intersection, voxelData.v->Min(), voxelData.v->Max()))
+			if(!rayIntersectsTriangle(raySource, rayDirection, triangleVertices, time, curIntersection)
+				|| !isPointInVolume(curIntersection, voxelData.v->Min(), voxelData.v->Max()))
 			{
 				continue;
 			}
 			if(time < minTime) {
 				meshIndex = currentMeshIndex;
-				innerFaceId = currentFaceIndex;
+				innerFaceId = faceIds[currentFaceIndex];
+				intersection = curIntersection;
 				minTime = time;
 				res = true;
 			}
@@ -719,8 +728,6 @@ bool RayTracer::closestIntersection( MPoint raySource, MVector rayDirection, Vox
 	}
 	return res;
 }
-
-
 
 MColor RayTracer::calculatePixelColor( MVector rayDirection, int meshIndex, int innerFaceId, MPoint intersection )
 {
@@ -736,17 +743,42 @@ MColor RayTracer::calculatePixelColor( MVector rayDirection, int meshIndex, int 
 	}
 	for (int vi = 0; vi < 3; ++vi) {
 		mesh.getPoint(vertexIds[vi], triangleVertices[vi], MSpace::kWorld);
-		mesh.getVertexNormal(vertexIds[vi], false, triangleNormals[vi], MSpace::kWorld );
+		mesh.getFaceVertexNormal(innerFaceId, vertexIds[vi], triangleNormals[vi], MSpace::kWorld );
 		triangleNormals[vi].normalize();
 	}
 
 	double u,v,w;
 
 	caclulateBaricentricCoordinates(triangleVertices, intersection, u, v, w);
+	//return MColor(u,v,w, 1);
 
 	MVector normalAtPoint = (u * triangleNormals[0] + v * triangleNormals[1] + w * triangleNormals[2]).normal();
+	MColor pixelColor = MColor(0,0,0,1);
 
+	LightDataT currLight;
+	
+	for (int li = (int) lightingData.size()- 1; li >= 0; --li)
+	{
+		MColor currColorComponent(0,0,0,0);
+		currLight = lightingData[li];
+		if(currLight.type == LightDataT::DIRECTIONAL)
+		{
+			float k = (float) (currLight.direction * normalAtPoint);
+			if (k < 0) {
+				currColorComponent = -k * material * currLight.color;
+				//return MColor(1,0,0,1);
+			}
+			//return MColor(0,1,0,1);
+		}
+		else if( currLight.type == LightDataT::POINT)
+		{
+			
+		}
 
+		pixelColor += currColorComponent;
+	}
+
+	return pixelColor;
 }
 
 

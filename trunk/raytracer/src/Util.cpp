@@ -438,16 +438,17 @@ namespace util
 			// at this stage we can compute t to find out where
 			// the intersection point is on the line
 			//double t = f * innerProduct(e2,q);
-			time = f * (edge02 * q);
-
-			if (time > DOUBLE_NUMERICAL_THRESHHOLD) // ray intersection
+			
+			double localTime = f * (edge02 * q);
+			if (localTime > DOUBLE_NUMERICAL_THRESHHOLD) // ray intersection
 			{
+				time = localTime;
 				intersection = raySrc + time * rayDirection;
-				return(true);
+				return true;
 			}
 			else // this means that there is a line intersection
 				// but not a ray intersection
-				return (false);
+				return false;
 
 	}
 
@@ -517,9 +518,9 @@ namespace util
 		MVector pv1 = triangleVertices[1] - point;
 		MVector pv2 = triangleVertices[2] - point;
 
-		u = ((pv1 ^ pv2).length() * 0.5 ) / triArea;
+		u = ((pv2 ^ pv1).length() * 0.5 ) / triArea;
 		v = ((pv0 ^ pv2).length() * 0.5 ) / triArea;
-		w = ((pv0 ^ pv1).length() * 0.5 ) / triArea;
+		w = ((pv1 ^ pv0).length() * 0.5 ) / triArea;
 	}
 
 }
