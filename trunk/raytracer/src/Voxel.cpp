@@ -59,9 +59,9 @@ bool Voxel::intersectionsWithRay( const MPoint& src, const MVector& dirVec, MPoi
 	planes[Z_NEG] = Plane(min, MVector(0,0, -1));
 	planes[Z_POS] = Plane(max, MVector(0,0,1));
 
-	double times[6];
-	AxisDirection dirs[6];
-	MPoint ints[6];
+	double times[2];
+	AxisDirection dirs[2];
+	MPoint ints[2];
 	int count = 0;
 
 	for (int i = 0; i < UNKNOWN_DIR && count < 2; ++i)

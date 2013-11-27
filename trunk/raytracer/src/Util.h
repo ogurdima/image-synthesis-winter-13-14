@@ -35,7 +35,7 @@ namespace util
 	MString							pointToString(MPoint p);
 	MString							vectorToString(MVector p);
 	MString							colorToString(MColor c);
-	MMatrix							getDagPathTransformationMatrix(MDagPath dagPath, MStatus* statusPtr);
+	//MMatrix							getDagPathTransformationMatrix(MDagPath dagPath, MStatus* statusPtr);
 	pair<MPoint, MPoint>			computeWfAxisAlignedBoundingBox(MDagPath meshPath, MStatus* statusPtr = NULL);
 	inline double					minimize(double* oldPtr, double newVal);
 	inline double					maximize(double* oldPtr, double newVal);
@@ -47,8 +47,8 @@ namespace util
 	bool							isPointInVolume(const MPoint& point, const MPoint& minVolume, const MPoint& maxVolume);
 	bool							triangleBoxOverlap( const MPoint center , const double boxhalfsize[3], const MPointArray triangleVertices);
 	bool							rayIntersectsTriangle(const MPoint raySrc,const MVector rayDirection, const MPoint triangleVertices[3], double& time, MPoint& intersection);
-
-	void caclulateBaricentricCoordinates( MPoint triangleVertices[3], MPoint point, double& u, double& v, double& w );
+	MVector							reflectedRay(MVector ligthDir, MVector normal);
+	void							caclulateBaricentricCoordinates( MPoint triangleVertices[3], MPoint point, double& u, double& v, double& w );
 
 };
 

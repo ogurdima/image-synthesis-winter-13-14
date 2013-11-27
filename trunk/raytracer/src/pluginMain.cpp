@@ -15,7 +15,8 @@ MStatus initializePlugin(MObject obj)
 { 
 	MFnPlugin plugin(obj, "IS", "1.0", "Any");
 
-	MStatus status = plugin.registerCommand("r", RayTracer::creator);
+	MStatus status = plugin.registerCommand("r", RayTracer::creator, RayTracer::newSyntax);
+	status = plugin.registerCommand("raytrace", RayTracer::creator, RayTracer::newSyntax);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 	return status;
 }
@@ -33,6 +34,7 @@ MStatus uninitializePlugin(MObject obj)
 	MFnPlugin plugin(obj);
 
 	MStatus status = plugin.deregisterCommand("r");
+	status = plugin.deregisterCommand("raytrace");
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 	return status;
 }

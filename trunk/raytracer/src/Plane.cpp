@@ -9,7 +9,7 @@ bool Plane::rayIntersection( const MPoint& rayOrigin, const MVector &rayDirectio
 		MVector originToPlanePoint =  planePoint - rayOrigin;
 		time = (originToPlanePoint * normal) / denom;
 		intersectionPoint = rayOrigin + (rayDirection * time );
-		return (time >= 0);
+		return true;
 	}
 	return false;
 }
