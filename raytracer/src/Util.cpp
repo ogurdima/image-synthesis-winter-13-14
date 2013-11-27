@@ -523,4 +523,12 @@ namespace util
 		w = ((pv1 ^ pv0).length() * 0.5 ) / triArea;
 	}
 
+	MVector reflectedRay( MVector ligthDir, MVector normal )
+	{
+		ligthDir.normalize();
+		normal.normalize();
+
+		return (ligthDir - 2 * normal * ( ligthDir * normal)).normal();
+	}
+
 }

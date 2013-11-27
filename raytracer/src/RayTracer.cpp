@@ -2,15 +2,16 @@
 
 #include "Profiler.h"
 
-#define PRINT_IN_MAYA(arg) MGlobal::displayInfo((arg)); 
+#define PRINT_IN_MAYA(arg) MGlobal::displayInfo((arg));
 
 
-MStatus RayTracer::doIt(const MArgList& argList) 
+MStatus RayTracer::doIt(const MArgList& argList)
 {
 	cout << "Running raytracer plugin..." << endl;
 	MGlobal::displayInfo("Running raytracer plugin...");
 	Profiler::clear();
 
+	parseArgs(argList);
 	storeActiveCameraData();
 	computeAndStoreImagePlaneData();
 	storeLightingData();
@@ -21,18 +22,74 @@ MStatus RayTracer::doIt(const MArgList& argList)
 
 	Profiler::printReport();
 	MGlobal::displayInfo("Raytracer plugin run finished!");
-	cout << "Raytracer plugin run finished!" << endl;  
+	cout << "Raytracer plugin run finished!" << endl;
 	return MS::kSuccess;
 }
 
-RayTracer::RayTracer() 
+MSyntax RayTracer::newSyntax()
 {
-	imgWidth  = 1280;
-	imgHeight = 960;
+	MSyntax syntax;
+
+	syntax.addFlag(widthFlag, "-width", MSyntax::kLong);
+	syntax.addFlag(heightFlag, "-height", MSyntax::kLong);
+	syntax.addFlag(voxelsFlag, "-voxels", MSyntax::kLong);
+	syntax.addFlag(supersamplingFlag, "-supersampling", MSyntax::kLong);
+
+	return syntax;
+}
+
+bool RayTracer::parseArgs( const MArgList& args)
+{
+	MArgParser    argData(syntax(), args);
+	MStatus s;
+	MString         arg;
+
+	if ( argData.isFlagSet(widthFlag) ) {
+		uint arg;
+		s = argData.getFlagArgument(widthFlag, 0, arg);	
+		if (s == MStatus::kSuccess) {
+			imgWidth = (arg < 1) ? 1 : arg;
+		}
+	}
+
+	if ( argData.isFlagSet(heightFlag) ) {
+		uint arg;
+		s = argData.getFlagArgument(heightFlag, 0, arg);	
+		if (s == MStatus::kSuccess) {
+			imgHeight = (arg < 1) ? 1 : arg;
+		}
+	}
+
+	if ( argData.isFlagSet(voxelsFlag) ) {
+		uint arg;
+		s = argData.getFlagArgument(voxelsFlag, 0, arg);	
+		if (s == MStatus::kSuccess) {
+			voxelParams.voxelsPerDimension = (arg < 1) ? 1 : arg;
+		}
+	}
+
+	if ( argData.isFlagSet(supersamplingFlag) ) {
+		uint arg;
+		s = argData.getFlagArgument(supersamplingFlag, 0, arg);	
+		if (s == MStatus::kSuccess) {
+			// do stuff
+			supersamplingCoeff = (arg < 1) ? 1 : arg;
+		}
+	}
+
+	return true;
+}
+
+RayTracer::RayTracer()
+{
+	imgWidth = 640;
+	imgHeight = 480;
+	voxelParams.voxelsPerDimension = 10;
+	supersamplingCoeff = 1;
+
 	minScene = MPoint( DBL_MAX ,DBL_MAX,DBL_MAX);
 	maxScene = MPoint(-DBL_MAX, -DBL_MAX, -DBL_MAX);
-	voxelParams.voxelsPerDimension = 10;
-
+	
 	meshesData.clear();
 	lightingData.clear();
 
@@ -44,7 +101,7 @@ RayTracer::RayTracer()
 	voxelsData.clear();
 };
 
-RayTracer::~RayTracer() 
+RayTracer::~RayTracer()
 {
 	for (int i = 0; i < voxelsData.size(); i++) {
 		if (voxelsData[i].v != NULL) {
@@ -54,9 +111,9 @@ RayTracer::~RayTracer()
 	voxelsData.clear();
 }
 
-void* RayTracer::creator() 
-{ 
-	return new RayTracer; 
+void* RayTracer::creator()
+{
+	return new RayTracer;
 }
 
 bool badMStatus(const MStatus& status, const MString& error)
@@ -117,7 +174,7 @@ void RayTracer::computeAndStoreImagePlaneData()
 	double imgAspect = (double)imgWidth / (double)imgHeight;
 	//double pixelWidth = (activeCameraData.filmWidthCm)/(double)imgWidth;
 	//double pixelHeight = pixelWidth / imgAspect;
-	imagePlane.dp = (2 * activeCameraData.filmWidthCm)/(double)imgWidth;
+	imagePlane.dp = (2.54 * activeCameraData.filmWidthCm)/(double)imgWidth;
 
 	int halfWidth = imgWidth / 2;
 	int halfHeight = imgHeight / 2;
@@ -126,7 +183,7 @@ void RayTracer::computeAndStoreImagePlaneData()
 	imagePlane.lt = centerPoint - (imagePlane.dp * halfWidth * imagePlane.x) + (imagePlane.dp * halfHeight * imagePlane.y);
 	imagePlane.rb = centerPoint + (imagePlane.dp * halfWidth * imagePlane.x) - (imagePlane.dp * halfHeight * imagePlane.y);
 	imagePlane.rt = centerPoint + (imagePlane.dp * halfWidth * imagePlane.x) + (imagePlane.dp * halfHeight * imagePlane.y);
-	
+
 }
 
 #pragma region storeLighting
@@ -161,7 +218,7 @@ void RayTracer::storeLightingData()
 			//PRINT_IN_MAYA("kPointLight");
 			storePointLight(dagPath);
 		}
-		else 
+		else
 		{
 			PRINT_IN_MAYA("Unsupported light");
 		}
@@ -183,6 +240,7 @@ void RayTracer::storeAmbientLight(MDagPath lightDagPath)
 	LightDataT ld;
 	ld.type = LightDataT::AMBIENT;
 	ld.color = l.color();
+	ld.intencity = l.intensity();
 	lightingData.push_back(ld);
 }
 
@@ -208,6 +266,7 @@ void RayTracer::storeDirectionalLight(MDagPath lightDagPath)
 	LightDataT ld;
 	ld.type = LightDataT::DIRECTIONAL;
 	ld.color = l.color();
+	ld.intencity = l.intensity();
 	ld.direction = lightDir;
 	lightingData.push_back(ld);
 }
@@ -216,22 +275,69 @@ void RayTracer::storePointLight(MDagPath lightDagPath)
 {
 	MStatus status;
 	MFnLight l(lightDagPath);
-	MMatrix transform = lightDagPath.inclusiveMatrix();  /*getDagPathTransformationMatrix(lightDagPath, &status);*/
+	MMatrix transform = lightDagPath.inclusiveMatrix(); /*getDagPathTransformationMatrix(lightDagPath, &status);*/
 	CHECK_MSTATUS(status);
 	MPoint pointLightOrigin = MPoint(0,0,0,1);
 	MPoint positionWorldFrame = pointLightOrigin * transform;
-	
-	
+
+
 	//PRINT_IN_MAYA(MString("Point Light in WF:") + pointToString(positionWorldFrame));
 
 	LightDataT ld;
 	ld.type = LightDataT::POINT;
 	ld.color = l.color();
+	ld.intencity = l.intensity();
 	ld.position = positionWorldFrame;
 	lightingData.push_back(ld);
 }
 
 #pragma endregion
+
+void outputMeshTexCoords(MDagPath& obj)
+{
+
+	// attach the function set to the object
+	MFnMesh fn(obj);
+
+	MStringArray uvsets;
+
+	// get the names of the uv sets on the mesh
+	fn.getUVSetNames(uvsets);
+
+	// This is an annoying hack. if the mesh has no uv 
+	// coords, it always seems to return a uv set. We
+	// therefore want to check for this so it causes us
+	// less hassle when writing the indices later
+	if( !uvsets.length() || !fn.numUVs(uvsets[0]) ) {
+		cout << "0\n";
+	}
+
+	cout << uvsets.length() << endl;
+
+	// write each tex coord
+	for(int j=0;j!=uvsets.length();++j) {
+		//output uvset name
+		cout << uvsets[j].asChar() << endl;
+
+		// two arrays for the uv texturecoords
+		MFloatArray u_coords;
+		MFloatArray v_coords;
+
+		// get the uv data
+		fn.getUVs(u_coords,v_coords,&uvsets[j]);
+
+		// write number of texture coordinate
+		cout	<< "NumUvs " << fn.numUVs(uvsets[j]) << "\n";
+
+		// write each tex coord
+		for(int i=0;i!=fn.numUVs(uvsets[j]);++i) {
+			// print tex coord
+			cout	<< u_coords[i] <<" " << v_coords[i] <<"\n";
+		}
+
+	}
+
+}
 
 void RayTracer::computeAndStoreMeshData()
 {
@@ -243,6 +349,7 @@ void RayTracer::computeAndStoreMeshData()
 		MDagPath dagPath;
 		status = dagIterator.getPath(dagPath);
 		CHECK_MSTATUS(status);
+		outputMeshTexCoords(dagPath); 
 		MFnMesh meshFn(dagPath);
 		triangulateMesh(meshFn);
 		pair<MPoint,MPoint> boundingBox = computeWfAxisAlignedBoundingBox(dagPath);
@@ -253,6 +360,8 @@ void RayTracer::computeAndStoreMeshData()
 		meshesData.push_back(aMesh);
 		PRINT_IN_MAYA(MString("Storing mesh, bb is:") + pointToString(aMesh.min) + "," + pointToString(aMesh.max));
 	}
+
+
 	MSelectionList selected;
 	MGlobal::getActiveSelectionList(selected);
 	selected.clear();
@@ -263,7 +372,7 @@ void RayTracer::computeAndStoreSceneBoundingBox()
 {
 	minScene = MPoint( DBL_MAX ,DBL_MAX,DBL_MAX);
 	maxScene = MPoint(-DBL_MAX, -DBL_MAX, -DBL_MAX);
-	for (int i = 0; i < meshesData.size(); i++) 
+	for (int i = 0; i < meshesData.size(); i++)
 	{
 		minimize(&(minScene.x), meshesData[i].min.x);
 		minimize(&(minScene.y), meshesData[i].min.y);
@@ -346,7 +455,7 @@ void RayTracer::computeAndStoreRawVoxelsData()
 	for (int ix = 0; ix < sideCount; x += dx, ix++)
 	{
 		y = minScene.y;
-		for (int iy = 0; iy < sideCount; y += dy, iy++) 
+		for (int iy = 0; iy < sideCount; y += dy, iy++)
 		{
 			z = minScene.z;
 			for (int iz = 0; iz < sideCount; z += dz, iz++)
@@ -385,43 +494,43 @@ void RayTracer::computeVoxelNeighborhoodData()
 
 	//for (int x = 0; x < sideCount; x++)
 	//{
-	//	for (int y = 0; y < sideCount; y++)
-	//	{
-	//		for (int z = 0; z < sideCount; z++)
-	//		{
-	//			curntIdx = flatten3dCubeIndex(sideCount, x, y, z);
-	//			xnextIdx = flatten3dCubeIndex(sideCount, x+1, y, z);
-	//			xprevIdx = flatten3dCubeIndex(sideCount, x-1, y, z);
-	//			ynextIdx = flatten3dCubeIndex(sideCount, x, y+1, z);
-	//			yprevIdx = flatten3dCubeIndex(sideCount, x, y-1, z);
-	//			znextIdx = flatten3dCubeIndex(sideCount, x, y, z+1);
-	//			zprevIdx = flatten3dCubeIndex(sideCount, x, y, z-1);
+	// for (int y = 0; y < sideCount; y++)
+	// {
+	// for (int z = 0; z < sideCount; z++)
+	// {
+	// curntIdx = flatten3dCubeIndex(sideCount, x, y, z);
+	// xnextIdx = flatten3dCubeIndex(sideCount, x+1, y, z);
+	// xprevIdx = flatten3dCubeIndex(sideCount, x-1, y, z);
+	// ynextIdx = flatten3dCubeIndex(sideCount, x, y+1, z);
+	// yprevIdx = flatten3dCubeIndex(sideCount, x, y-1, z);
+	// znextIdx = flatten3dCubeIndex(sideCount, x, y, z+1);
+	// zprevIdx = flatten3dCubeIndex(sideCount, x, y, z-1);
 
-	//			Voxel* curV = voxelsData[curntIdx].v;
+	// Voxel* curV = voxelsData[curntIdx].v;
 
-	//			// OMG I hate this
-	//			if (xnextIdx >= minIdx && xnextIdx <= maxIdx) {
-	//				curV->xnext = voxelsData[xnextIdx].v;
-	//			}
-	//			if (xprevIdx >= minIdx && xprevIdx <= maxIdx) {
-	//				curV->xprev = voxelsData[xprevIdx].v;
-	//			}
+	// // OMG I hate this
+	// if (xnextIdx >= minIdx && xnextIdx <= maxIdx) {
+	// curV->xnext = voxelsData[xnextIdx].v;
+	// }
+	// if (xprevIdx >= minIdx && xprevIdx <= maxIdx) {
+	// curV->xprev = voxelsData[xprevIdx].v;
+	// }
 
-	//			if (ynextIdx >= minIdx && ynextIdx <= maxIdx) {
-	//				curV->ynext = voxelsData[ynextIdx].v;
-	//			}
-	//			if (yprevIdx >= minIdx && yprevIdx <= maxIdx) {
-	//				curV->yprev = voxelsData[yprevIdx].v;
-	//			}
+	// if (ynextIdx >= minIdx && ynextIdx <= maxIdx) {
+	// curV->ynext = voxelsData[ynextIdx].v;
+	// }
+	// if (yprevIdx >= minIdx && yprevIdx <= maxIdx) {
+	// curV->yprev = voxelsData[yprevIdx].v;
+	// }
 
-	//			if (znextIdx >= minIdx && znextIdx <= maxIdx) {
-	//				curV->znext = voxelsData[znextIdx].v;
-	//			}
-	//			if (zprevIdx >= minIdx && zprevIdx <= maxIdx) {
-	//				curV->zprev = voxelsData[zprevIdx].v;
-	//			}
-	//		}	
-	//	}
+	// if (znextIdx >= minIdx && znextIdx <= maxIdx) {
+	// curV->znext = voxelsData[znextIdx].v;
+	// }
+	// if (zprevIdx >= minIdx && zprevIdx <= maxIdx) {
+	// curV->zprev = voxelsData[zprevIdx].v;
+	// }
+	// }
+	// }
 	//}
 }
 
@@ -464,10 +573,14 @@ void RayTracer::computeVoxelMeshBboxIntersections()
 }
 
 void RayTracer::bresenhaim()
-{	
+{
 	unsigned char* pixels = new unsigned char[imgWidth*imgHeight*4];
 	memset(pixels,0,imgWidth*imgHeight*4);
 	MPoint lbPixelCenter = imagePlane.lb + (imagePlane.x + imagePlane.y) * (imagePlane.dp / 2);
+
+	double ssDp = imagePlane.dp / (double) (supersamplingCoeff + 1);
+	MVector ssdx = imagePlane.x * ssDp;
+	MVector ssdy = imagePlane.y * ssDp;
 
 	MVector dx = imagePlane.x * imagePlane.dp;
 	MVector dy = imagePlane.y * imagePlane.dp;
@@ -475,6 +588,9 @@ void RayTracer::bresenhaim()
 	int dimension = voxelParams.voxelsPerDimension;
 	MPoint raySource = activeCameraData.eye;
 
+	int meshIntersectionIndex, innerFaceIntersectionIndex;
+	MPoint intersectionPoint;
+	
 
 	for( int h = 0; h < imgHeight; ++h )
 	{
@@ -482,22 +598,28 @@ void RayTracer::bresenhaim()
 		{
 			Profiler::startTimer("onePixel");
 			int x, y, z;
-			
-			MVector rayDirection = lbPixelCenter + ( h * dy ) + (w * dx) - activeCameraData.eye;
-			rayDirection.normalize();
-
-			
-			bool res = findStartingVoxelIndeces(rayDirection, x, y, z);
-			if(!res)
+			MColor pixelColor;
+			for (int sh = 1; sh <= supersamplingCoeff; sh++ )
 			{
-				Profiler::finishTimer("onePixel");
-				continue;
+				for (int sw = 1; sw <= supersamplingCoeff; sw++)
+				{
+					MPoint rayOnImagePlane = imagePlane.lb + ( h * dy ) + (w * dx) + (sh * ssdy) + (sw * ssdx);
+					MVector rayDirection = (rayOnImagePlane - activeCameraData.eye).normal();
+
+					if( !findStartingVoxelIndeces(rayDirection, x, y, z) ||
+						!closestIntersection(dimension, raySource, rayDirection, x, y, z, meshIntersectionIndex, innerFaceIntersectionIndex, intersectionPoint ))
+					{
+						// Put the background
+						// currently black
+						continue;
+					}
+					pixelColor += (calculatePixelColor(x, y, z, rayDirection, meshIntersectionIndex, innerFaceIntersectionIndex, intersectionPoint) / (supersamplingCoeff*supersamplingCoeff));
+				}
 			}
-
-			
-			shootRay(dimension, x, y, z, raySource, rayDirection, pixels, h, w);
+			pixels[h*imgWidth*4 + w*4] = (unsigned char) (pixelColor.r * 255.0);
+			pixels[h*imgWidth*4 + w*4 + 1] = (unsigned char) (pixelColor.g * 255.0);
+			pixels[h*imgWidth*4 + w*4 + 2] = (unsigned char) (pixelColor.b * 255.0);
 			Profiler::finishTimer("onePixel");
-
 		}
 	}
 	MImage img;
@@ -509,7 +631,7 @@ void RayTracer::bresenhaim()
 
 bool RayTracer::findStartingVoxelIndeces(const MVector& rayDirection, int& x, int& y, int& z)
 {
-	
+
 	if(cameraInSceneBB)
 	{
 		x = initCameraVoxelX;
@@ -527,8 +649,8 @@ bool RayTracer::findStartingVoxelIndeces(const MVector& rayDirection, int& x, in
 		MPoint curIntersection;
 		double curTime;
 		AxisDirection curDirection = (AxisDirection)i;
-		if( sceneBBPlanes[i].rayIntersection(activeCameraData.eye, rayDirection, curTime, curIntersection) 
-			&& pointInRectangle(curDirection, curIntersection,  minScene, maxScene))
+		if( sceneBBPlanes[i].rayIntersection(activeCameraData.eye, rayDirection, curTime, curIntersection)
+			&& pointInRectangle(curDirection, curIntersection, minScene, maxScene))
 		{
 			if(curTime < time)
 			{
@@ -546,7 +668,7 @@ bool RayTracer::findStartingVoxelIndeces(const MVector& rayDirection, int& x, in
 	AxisDirection uDirection, vDirection;
 	orthonormalDirections(direction, uDirection, vDirection);
 
-	if (!findIndecesByDimension( closestIntersection, uDirection, x, y, z) || 
+	if (!findIndecesByDimension( closestIntersection, uDirection, x, y, z) ||
 		!findIndecesByDimension(closestIntersection, vDirection, x, y, z) )
 	{
 		return false;
@@ -580,7 +702,7 @@ void RayTracer::initIndeces( AxisDirection direction, int& x, int& y, int& z )
 	if (direction == X_POS)
 	{
 		x = voxelParams.voxelsPerDimension - 1;
-	} 
+	}
 	else if (direction == Y_POS)
 	{
 		y = voxelParams.voxelsPerDimension - 1;
@@ -657,39 +779,43 @@ void RayTracer::incrementIndeces( AxisDirection uDirection, int& x, int& y, int&
 	}
 }
 
-void RayTracer::shootRay(int dimension, int x, int y, int z, MPoint raySource, MVector rayDirection, unsigned char* pixels, int h, int w )
+// The function finds the mesh with it intersects given ray, the inner id of the face in the mesh and the intersection point.
+// Also it changes the x,y,z indices to match the voxel where the closest intersection happens.
+// Returns true if finds
+// Return false if it arrives to the scene bounds and doesn't meet any mesh an some point.
+bool RayTracer::closestIntersection(const int dimension,const MPoint& raySource,const MVector& rayDirection, int& x, int& y, int& z , int& meshIndex, int& innerFaceId, MPoint& intersection )
 {
 	MPoint nearInt, farInt;
 	AxisDirection nearAxisDir, farAxisDir;
 	VoxelDataT voxelData;
-	int meshIndex, innerFaceId;
-	MPoint intersection;
-	MColor pixelColor;
-	for(;x >= 0 && x < dimension && y >= 0 && y < dimension && z >= 0 && z < dimension; incrementIndeces(farAxisDir, x, y, z))
-	{
+	int currMeshIndex, currInnerFaceId;
+	MPoint currIntersection;
+	for(;x >= 0 && x < dimension && y >= 0 && y < dimension && z >= 0 && z < dimension; incrementIndeces(farAxisDir, x, y, z)) {
 		voxelData = voxelsData[flatten3dCubeIndex(dimension, x, y, z)];
-		if(!voxelData.v->intersectionsWithRay(raySource, rayDirection, nearInt, nearAxisDir, farInt, farAxisDir)) { 
-			break; 
+		if(!voxelData.v->intersectionsWithRay(raySource, rayDirection, nearInt, nearAxisDir, farInt, farAxisDir)) {
+			break;
 		}
-		if(voxelData.meshIdToFaceIds.size() == 0) { 
-			continue; 
-		}
-		if(!closestIntersection(raySource, rayDirection, voxelData, meshIndex, innerFaceId, intersection)) {
+		if(voxelData.meshIdToFaceIds.size() == 0) {
 			continue;
 		}
-		pixelColor = calculatePixelColor(rayDirection, meshIndex, innerFaceId, intersection);
-		pixels[h*imgWidth*4 + w*4] = (unsigned char) (pixelColor.r * 255.0);
-		pixels[h*imgWidth*4 + w*4 + 1] = (unsigned char) (pixelColor.g * 255.0);
-		pixels[h*imgWidth*4 + w*4 + 2] = (unsigned char) (pixelColor.b * 255.0);
-		return;
+		if(!closestIntersectionInVoxel(raySource, rayDirection, voxelData, currMeshIndex, currInnerFaceId, currIntersection)) {
+			continue;
+		}
+
+		meshIndex = currMeshIndex;
+		innerFaceId = currInnerFaceId;
+		intersection = currIntersection;
+		return true;
 	}
 
-	pixels[h*imgWidth*4 + w*4] = 0;
+	return false;
+
+	/*pixels[h*imgWidth*4 + w*4] = 0;
 	pixels[h*imgWidth*4 + w*4 + 1] = 125;
-	pixels[h*imgWidth*4 + w*4 + 2] = 0;
+	pixels[h*imgWidth*4 + w*4 + 2] = 0;*/
 }
 
-bool RayTracer::closestIntersection( MPoint raySource, MVector rayDirection, VoxelDataT &voxelData, int &meshIndex, int &innerFaceId, MPoint &intersection )
+bool RayTracer::closestIntersectionInVoxel( MPoint raySource, MVector rayDirection, VoxelDataT &voxelData, int &meshIndex, int &innerFaceId, MPoint &intersection )
 {
 	bool res = false;
 	double minTime = DBL_MAX;
@@ -729,9 +855,9 @@ bool RayTracer::closestIntersection( MPoint raySource, MVector rayDirection, Vox
 	return res;
 }
 
-MColor RayTracer::calculatePixelColor( MVector rayDirection, int meshIndex, int innerFaceId, MPoint intersection )
+MColor RayTracer::calculatePixelColor(const int x, const int y, const int z,const MVector& rayDirection, const int meshIndex,const int innerFaceId,const MPoint& intersection)
 {
-	MColor material( 0.5,0.5,0.5 );
+	MColor material( 0.25,0.25,0.25 );
 	MFnMesh mesh(meshesData[meshIndex].dagPath);
 	MIntArray vertexIds;
 	MPoint triangleVertices[3];
@@ -756,29 +882,62 @@ MColor RayTracer::calculatePixelColor( MVector rayDirection, int meshIndex, int 
 	MColor pixelColor = MColor(0,0,0,1);
 
 	LightDataT currLight;
-	
+	int currX, currY, currZ;
+	MPoint secondIntersection;
+	int secondIntersectionMeshIndex, secondIntersectionFaceId;
 	for (int li = (int) lightingData.size()- 1; li >= 0; --li)
 	{
 		MColor currColorComponent(0,0,0,0);
+		
 		currLight = lightingData[li];
-		if(currLight.type == LightDataT::DIRECTIONAL)
+		MColor mixedColor = material * currLight.color * currLight.intencity;
+		currX = x;
+		currY = y;
+		currZ = z;
+		if(currLight.type == LightDataT::AMBIENT)
 		{
-			float k = (float) (currLight.direction * normalAtPoint);
-			if (k < 0) {
-				currColorComponent = -k * material * currLight.color;
-				//return MColor(1,0,0,1);
+			pixelColor += mixedColor;
+		}
+		else if(currLight.type == LightDataT::DIRECTIONAL)
+		{
+			if(closestIntersection(voxelParams.voxelsPerDimension, intersection, -currLight.direction, currX, currY, currZ, secondIntersectionMeshIndex, secondIntersectionFaceId, secondIntersection )){
+				continue; // shadow 
 			}
-			//return MColor(0,1,0,1);
+			pixelColor += calculateSpecularAndDiffuse(rayDirection, currLight.direction, normalAtPoint, mixedColor);
 		}
 		else if( currLight.type == LightDataT::POINT)
 		{
-			
-		}
+			MVector lightDirection = intersection - currLight.position;
+			MVector lightDirectionNormalized = lightDirection.normal();
 
-		pixelColor += currColorComponent;
+			if(closestIntersection(voxelParams.voxelsPerDimension, intersection, -lightDirectionNormalized, currX, currY, currZ, secondIntersectionMeshIndex, secondIntersectionFaceId, secondIntersection )){
+				if((secondIntersection - intersection).length() < lightDirection.length())
+					continue; // shadow 
+				// else the secondary intersection happens behind the light
+			}
+			pixelColor += calculateSpecularAndDiffuse(rayDirection, lightDirectionNormalized, normalAtPoint, mixedColor);
+		}
 	}
 
 	return pixelColor;
+}
+
+MColor RayTracer::calculateSpecularAndDiffuse( const MVector& viewDirection, MVector lightDirection, MVector normalAtPoint, MColor mixedColor )
+{
+	// diffuse
+	MColor currColorComponent;
+	float k = (float) (lightDirection * normalAtPoint);
+	if (k < 0) {
+		currColorComponent += -k * mixedColor;
+	}
+
+	// specular
+	MVector reflected = reflectedRay(lightDirection, normalAtPoint);
+	k = -(reflected * viewDirection);
+	if(k > 0) {
+		currColorComponent += pow(k, 20) * mixedColor;
+	}	
+	return currColorComponent;
 }
 
 
@@ -856,7 +1015,7 @@ MPoint ptsToDraw[100];
 MMatrix camMatrix;
 
 MItDag camIter(MItDag::kDepthFirst, MFn::kCamera);
-while (!camIter.isDone()) 
+while (!camIter.isDone())
 {
 MFnCamera curCam (camIter.currentItem());
 if (curCam.name() != "dima_yasha") {
@@ -875,7 +1034,7 @@ break;
 
 int i = 0;
 MItDag dagIter(MItDag::kDepthFirst, MFn::kMesh);
-while (!dagIter.isDone()) 
+while (!dagIter.isDone())
 {
 MDagPath dagPath;
 mystat = dagIter.getPath(dagPath);
@@ -907,7 +1066,7 @@ void RayTracer::printCamerasInfo()
 
 }
 
-MPoint RayTracer::getObjectSpaceCentroid(MObject obj) 
+MPoint RayTracer::getObjectSpaceCentroid(MObject obj)
 {
 MStatus mystat;
 MItMeshVertex vit(obj, &mystat);
@@ -940,7 +1099,7 @@ MString outstr;
 while(!it.isDone())
 {
 MObject obj = it.item();
-MGlobal::displayInfo(obj.apiTypeStr()); 
+MGlobal::displayInfo(obj.apiTypeStr());
 
 MItMeshVertex vit(obj, &mystat);
 if (MS::kSuccess != mystat) {
@@ -954,7 +1113,7 @@ MPoint vpoint = vit.position();
 outstr.clear();
 outstr = "[";
 (((((outstr += vpoint.x) += ",") += vpoint.y) += ",") += vpoint.z) += "]";
-MGlobal::displayInfo(outstr); 
+MGlobal::displayInfo(outstr);
 aggregatedPoint += vpoint;
 numVertices++;
 vit.next();
@@ -974,7 +1133,7 @@ MTransformationMatrix trans = transFn.transformation();
 MMatrix actualTransMat = trans.asMatrix();
 
 outstr.clear();
-outstr += "The centroid is in ["; 
+outstr += "The centroid is in [";
 //outstr += res1.x;
 //outstr += ",";
 //outstr += res1.y;
@@ -984,7 +1143,7 @@ outstr += "The centroid is in [";
 //outstr += res1.w;
 
 outstr += "]";
-MGlobal::displayInfo(outstr); 
+MGlobal::displayInfo(outstr);
 }
 
 
@@ -1029,7 +1188,7 @@ cout << "Ambient light " << light.name() << ", color: ["
 }
 }
 }
-} 
+}
 
 void RayTracer::getCameraInfo()
 {
@@ -1064,7 +1223,7 @@ int halfWidth = imgWidth / 2;
 int halfHeight = imgHeight / 2;
 
 MVector leftBottom = center - delta * halfWidth * xAxis - delta * halfHeight * yAxis;
-MVector leftBottomCenter =  leftBottom + 0.5 * delta * (xAxis + yAxis);
+MVector leftBottomCenter = leftBottom + 0.5 * delta * (xAxis + yAxis);
 
 MVector dx = delta * xAxis;
 MVector dy = delta * yAxis;
@@ -1099,8 +1258,8 @@ int len = colors.length();
 
 for(int i = 0; i < 3; ++i)
 {
-mesh.getPoint(vertices[i], points[i], MSpace::kWorld);  
-mesh.getVertexNormal(vertices[i],false, normals[i], MSpace::kWorld);  
+mesh.getPoint(vertices[i], points[i], MSpace::kWorld);
+mesh.getVertexNormal(vertices[i],false, normals[i], MSpace::kWorld);
 
 }
 
