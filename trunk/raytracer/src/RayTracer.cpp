@@ -293,50 +293,56 @@ void RayTracer::storePointLight(MDagPath lightDagPath)
 
 #pragma endregion
 
-void outputMeshTexCoords(MDagPath& obj)
+void RayTracer::storeMeshTexturingData(MeshDataT& m)
 {
+	MFnMesh fn(m.dagPath);
+	MObjectArray shaders;
+	MIntArray indices;
+	fn.getConnectedShaders(0, shaders, indices);
+	for(uint i = 0; i < shaders.length(); i++)
+	{
+		MPlugArray connections;
+		MFnDependencyNode shaderGroup(shaders[i]);
+		MPlug shaderPlug = shaderGroup.findPlug("surfaceShader");
+		shaderPlug.connectedTo(connections, true, false);
+		for(uint u = 0; u < connections.length(); u++)
+		{
+			if(connections[u].node().hasFn(MFn::kLambert))
+			{
+				MFnLambertShader lambertShader(connections[u].node());
+				MImage textureImage;
+				if (getLambertShaderTexture(lambertShader, textureImage)) 
+				{
+					// store the texture image
+					m.texture = textureImage;
+					m.hasTexture = true;
+				}
+				else 
+				{
+					// assign diffuse and ambient color
+					m.hasTexture = false;
+					m.diffuse = lambertShader.color();
+				}
+				m.ambient = lambertShader.ambientColor();
 
-	// attach the function set to the object
-	MFnMesh fn(obj);
+				if(connections[u].node().hasFn(MFn::kReflect))
+				{
+					MFnReflectShader shader(connections[u].node());
+					m.specular = shader.specularColor();
+				}
 
-	MStringArray uvsets;
+				if(connections[u].node().hasFn(MFn::kPhong))
+				{
+					MFnPhongShader shader(connections[u].node());
+					m.specularPower = shader.cosPower();
+				}
+				else {
+					m.specularPower = -1.0;
+				}
 
-	// get the names of the uv sets on the mesh
-	fn.getUVSetNames(uvsets);
-
-	// This is an annoying hack. if the mesh has no uv 
-	// coords, it always seems to return a uv set. We
-	// therefore want to check for this so it causes us
-	// less hassle when writing the indices later
-	if( !uvsets.length() || !fn.numUVs(uvsets[0]) ) {
-		cout << "0\n";
-	}
-
-	cout << uvsets.length() << endl;
-
-	// write each tex coord
-	for(int j=0;j!=uvsets.length();++j) {
-		//output uvset name
-		cout << uvsets[j].asChar() << endl;
-
-		// two arrays for the uv texturecoords
-		MFloatArray u_coords;
-		MFloatArray v_coords;
-
-		// get the uv data
-		fn.getUVs(u_coords,v_coords,&uvsets[j]);
-
-		// write number of texture coordinate
-		cout	<< "NumUvs " << fn.numUVs(uvsets[j]) << "\n";
-
-		// write each tex coord
-		for(int i=0;i!=fn.numUVs(uvsets[j]);++i) {
-			// print tex coord
-			cout	<< u_coords[i] <<" " << v_coords[i] <<"\n";
+			}
 		}
-
 	}
-
 }
 
 void RayTracer::computeAndStoreMeshData()
@@ -349,7 +355,6 @@ void RayTracer::computeAndStoreMeshData()
 		MDagPath dagPath;
 		status = dagIterator.getPath(dagPath);
 		CHECK_MSTATUS(status);
-		outputMeshTexCoords(dagPath); 
 		MFnMesh meshFn(dagPath);
 		triangulateMesh(meshFn);
 		pair<MPoint,MPoint> boundingBox = computeWfAxisAlignedBoundingBox(dagPath);
@@ -357,6 +362,7 @@ void RayTracer::computeAndStoreMeshData()
 		aMesh.dagPath = dagPath;
 		aMesh.min = boundingBox.first;
 		aMesh.max = boundingBox.second;
+		storeMeshTexturingData(aMesh); 
 		meshesData.push_back(aMesh);
 		PRINT_IN_MAYA(MString("Storing mesh, bb is:") + pointToString(aMesh.min) + "," + pointToString(aMesh.max));
 	}
@@ -857,26 +863,44 @@ bool RayTracer::closestIntersectionInVoxel( MPoint raySource, MVector rayDirecti
 
 MColor RayTracer::calculatePixelColor(const int x, const int y, const int z,const MVector& rayDirection, const int meshIndex,const int innerFaceId,const MPoint& intersection)
 {
-	MColor material( 0.25,0.25,0.25 );
+	
 	MFnMesh mesh(meshesData[meshIndex].dagPath);
 	MIntArray vertexIds;
 	MPoint triangleVertices[3];
 	MVector triangleNormals[3];
+	float us[3];
+	float vs[3];
 
 	mesh.getPolygonVertices(innerFaceId, vertexIds);
 	if(vertexIds.length() != 3) {
+		MColor material( 0.25,0.25,0.25 );
 		return material;
 	}
 	for (int vi = 0; vi < 3; ++vi) {
 		mesh.getPoint(vertexIds[vi], triangleVertices[vi], MSpace::kWorld);
 		mesh.getFaceVertexNormal(innerFaceId, vertexIds[vi], triangleNormals[vi], MSpace::kWorld );
 		triangleNormals[vi].normalize();
+		mesh.getPolygonUV(innerFaceId, vi, us[vi], vs[vi]);
 	}
 
 	double u,v,w;
-
 	caclulateBaricentricCoordinates(triangleVertices, intersection, u, v, w);
 	//return MColor(u,v,w, 1);
+
+	MColor	specularMaterialColor	=	meshesData[meshIndex].specular;
+	MColor	ambientMaterialColor	=	meshesData[meshIndex].ambient;
+	float	specularPower			=	meshesData[meshIndex].specularPower;
+	MColor	diffuseMaterialColor;
+	if (meshesData[meshIndex].hasTexture) 
+	{
+		// get texture color at point using u,v,w and bilinear filter
+	}
+	else 
+	{
+		diffuseMaterialColor = meshesData[meshIndex].diffuse;
+	}
+
+	
 
 	MVector normalAtPoint = (u * triangleNormals[0] + v * triangleNormals[1] + w * triangleNormals[2]).normal();
 	MColor pixelColor = MColor(0,0,0,1);
@@ -890,20 +914,22 @@ MColor RayTracer::calculatePixelColor(const int x, const int y, const int z,cons
 		MColor currColorComponent(0,0,0,0);
 		
 		currLight = lightingData[li];
-		MColor mixedColor = material * currLight.color * currLight.intencity;
+		MColor mixedDiffuse = diffuseMaterialColor * currLight.color * currLight.intencity;
+		MColor mixedSpecular = specularMaterialColor * currLight.color * currLight.intencity;	
 		currX = x;
 		currY = y;
 		currZ = z;
 		if(currLight.type == LightDataT::AMBIENT)
 		{
-			pixelColor += mixedColor;
+			MColor mixedAmbient = ambientMaterialColor * currLight.color * currLight.intencity;
+			pixelColor = sumColors(mixedAmbient, pixelColor);
 		}
 		else if(currLight.type == LightDataT::DIRECTIONAL)
 		{
 			if(closestIntersection(voxelParams.voxelsPerDimension, intersection, -currLight.direction, currX, currY, currZ, secondIntersectionMeshIndex, secondIntersectionFaceId, secondIntersection )){
 				continue; // shadow 
 			}
-			pixelColor += calculateSpecularAndDiffuse(rayDirection, currLight.direction, normalAtPoint, mixedColor);
+			pixelColor = sumColors(calculateSpecularAndDiffuse(rayDirection, currLight.direction, normalAtPoint, mixedDiffuse, mixedSpecular, specularPower), pixelColor);
 		}
 		else if( currLight.type == LightDataT::POINT)
 		{
@@ -915,28 +941,37 @@ MColor RayTracer::calculatePixelColor(const int x, const int y, const int z,cons
 					continue; // shadow 
 				// else the secondary intersection happens behind the light
 			}
-			pixelColor += calculateSpecularAndDiffuse(rayDirection, lightDirectionNormalized, normalAtPoint, mixedColor);
+			pixelColor = sumColors(calculateSpecularAndDiffuse(rayDirection, lightDirectionNormalized, normalAtPoint, mixedDiffuse, mixedSpecular, specularPower), pixelColor) ;
 		}
+	}
+
+	if(pixelColor.r > 0.5 && pixelColor.b > 0.5 && pixelColor.g < 0.5)
+	{
+		return MColor(0.25, 0.25, 0.25);
 	}
 
 	return pixelColor;
 }
 
-MColor RayTracer::calculateSpecularAndDiffuse( const MVector& viewDirection, MVector lightDirection, MVector normalAtPoint, MColor mixedColor )
+MColor RayTracer::calculateSpecularAndDiffuse(const MVector& viewDirection, MVector lightDirection,  MVector normalAtPoint, MColor mixedDiffuse, MColor mixedSpecular, float specularPower )
 {
 	// diffuse
 	MColor currColorComponent;
 	float k = (float) (lightDirection * normalAtPoint);
 	if (k < 0) {
-		currColorComponent += -k * mixedColor;
+		currColorComponent = sumColors(-k * mixedDiffuse, currColorComponent);
 	}
 
 	// specular
-	MVector reflected = reflectedRay(lightDirection, normalAtPoint);
-	k = -(reflected * viewDirection);
-	if(k > 0) {
-		currColorComponent += pow(k, 20) * mixedColor;
-	}	
+	if (specularPower > 0)
+	{
+		MVector reflected = reflectedRay(lightDirection, normalAtPoint);
+		k = -(reflected * viewDirection);
+		if(k > 0) {
+			currColorComponent = sumColors(pow(k, specularPower) * mixedSpecular, currColorComponent);
+		}	
+	}
+	
 	return currColorComponent;
 }
 

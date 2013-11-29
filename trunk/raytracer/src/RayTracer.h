@@ -26,6 +26,11 @@
 #include <maya/MTimer.h>
 #include <maya/MArgDatabase.h>
 #include <maya/MArgParser.h>
+#include <maya/MPlug.h>
+#include <maya/MPlugArray.h>
+#include <maya/MFnLambertShader.h>
+#include <maya/MFnReflectShader.h>
+#include <maya/MFnPhongShader.h>
 #include <vector>
 #include <string>
 #include <sstream>
@@ -140,6 +145,12 @@ class RayTracer : public MPxCommand
 		MPoint		max;		// WS axis aligned bounding box min
 		MPoint		min;		// WS axis aligned bounding box max
 
+		bool		hasTexture;
+		MImage		texture;
+		MColor		diffuse;
+		MColor		specular;
+		MColor		ambient;
+		float		specularPower;
 	};
 
 	vector<MeshDataT> meshesData;
@@ -199,6 +210,8 @@ public:
 	void computeVoxelMeshBboxIntersections();
 	void bresenhaim();
 
+	void storeMeshTexturingData(MeshDataT& m);
+
 	bool closestIntersection(const int dimension,const MPoint& raySource,const MVector& rayDirection,int& x,int& y,int& z , int& meshIndex, int& innerFaceId, MPoint& intersection  );
 
 	bool closestIntersectionInVoxel( MPoint raySource, MVector rayDirection, VoxelDataT &voxelData, int &meshIndex, int &innerFaceId, MPoint &intersection  );
@@ -214,7 +227,7 @@ public:
 	
 	MColor calculatePixelColor(const int x, const int y, const int z,const MVector& rayDirection, const int meshIndex,const int innerFaceId,const MPoint& intersection );
 
-	MColor calculateSpecularAndDiffuse(const MVector& viewDirection, MVector lightDirection,  MVector normalAtPoint, MColor mixedColor);
+	MColor calculateSpecularAndDiffuse(const MVector& viewDirection, MVector lightDirection,  MVector normalAtPoint, MColor mixedDiffuse, MColor mixedSpecular, float specularPower);
 
 
 };

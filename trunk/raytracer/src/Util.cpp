@@ -193,6 +193,38 @@ namespace util
 		return false;
 	}
 
+	bool getLambertShaderTexture(MFnLambertShader& lambert, MImage& img)
+	{
+		MPlugArray plugs;
+		lambert.findPlug("color").connectedTo(plugs, true, false);
+		for(uint i = 0; i < plugs.length(); i++)
+		{
+			if (plugs[i].node().hasFn(MFn::kFileTexture))
+			{
+				img.release();
+				img.readFromTextureNode( plugs[i].node() );
+				return true;
+			}
+		}
+		return false;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #define X 0
 #define Y 1
@@ -529,6 +561,17 @@ namespace util
 		normal.normalize();
 
 		return (ligthDir - 2 * normal * ( ligthDir * normal)).normal();
+	}
+
+	MColor sumColors( const MColor& c1 , const MColor& c2 )
+	{
+		MColor res;
+		for (int i = 0 ; i < 3; i++)
+		{
+			float tmp = c1[i] + c2[i];
+			res[i] = tmp > 1 ? 1.0 : tmp;
+		}
+		return res;
 	}
 
 }

@@ -18,6 +18,9 @@
 #include <maya/MFnLight.h>
 #include <maya/M3dView.h>
 #include <maya/MImage.h>
+#include <maya/MFnLambertShader.h>
+#include <maya/MPlug.h>
+#include <maya/MPlugArray.h>
 #include "Definitions.h"
 
 
@@ -49,6 +52,10 @@ namespace util
 	bool							rayIntersectsTriangle(const MPoint raySrc,const MVector rayDirection, const MPoint triangleVertices[3], double& time, MPoint& intersection);
 	MVector							reflectedRay(MVector ligthDir, MVector normal);
 	void							caclulateBaricentricCoordinates( MPoint triangleVertices[3], MPoint point, double& u, double& v, double& w );
+
+	bool							getLambertShaderTexture(MFnLambertShader& lambert, MImage& img);
+
+	MColor							sumColors(const MColor& c1 , const MColor& c2);
 
 };
 
