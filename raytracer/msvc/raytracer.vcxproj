@@ -113,9 +113,9 @@ if EXIST "$(MAYA_APP_DIR)\2014-x64\plugins$(TargetFileName)" (
   <ItemGroup>
     <ClCompile Include="..\src\Plane.cpp" />
     <ClCompile Include="..\src\pluginMain.cpp" />
+    <ClCompile Include="..\src\Profiler.cpp" />
     <ClCompile Include="..\src\RayTracer.cpp" />
     <ClCompile Include="..\src\Util.cpp" />
-    <ClCompile Include="..\src\Profiler.cpp" />
     <ClCompile Include="..\src\Voxel.cpp" />
   </ItemGroup>
   <ItemGroup>
