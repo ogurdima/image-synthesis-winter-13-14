@@ -51,7 +51,7 @@ namespace util
 	bool							triangleBoxOverlap( const MPoint center , const double boxhalfsize[3], const MPointArray triangleVertices);
 	bool							rayIntersectsTriangle(const MPoint raySrc,const MVector rayDirection, const MPoint triangleVertices[3], double& time, MPoint& intersection);
 	MVector							reflectedRay(MVector ligthDir, MVector normal);
-	void							caclulateBaricentricCoordinates( MPoint triangleVertices[3], MPoint point, double& u, double& v, double& w );
+	void							caclulateBaricentricCoordinates( MPoint triangleVertices[3], MPoint point, double baricentricCoords[3] );
 
 	bool							getLambertShaderTexture(MFnLambertShader& lambert, MImage& img);
 

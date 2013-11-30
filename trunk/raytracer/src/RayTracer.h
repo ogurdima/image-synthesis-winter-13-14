@@ -146,11 +146,12 @@ class RayTracer : public MPxCommand
 		MPoint		min;		// WS axis aligned bounding box max
 
 		bool		hasTexture;
-		MImage		texture;
+		MImage*		texture;
 		MColor		diffuse;
 		MColor		specular;
 		MColor		ambient;
 		float		specularPower;
+		
 	};
 
 	vector<MeshDataT> meshesData;
