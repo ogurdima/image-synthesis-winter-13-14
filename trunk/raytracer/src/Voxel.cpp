@@ -1,7 +1,4 @@
 #include "Voxel.h"
-#include "Plane.h"
-#include <maya/MItMeshPolygon.h>
-#include "Profiler.h"
 
 Voxel::Voxel(MPoint _min, MPoint _max)
 {
@@ -49,6 +46,7 @@ Voxel::~Voxel(void)
 
 bool Voxel::intersectionsWithRay( const MPoint& src, const MVector& dirVec, MPoint & nearInt, AxisDirection& nearDir, MPoint farInt, AxisDirection& farDir )
 {
+	//Profiler::startTimer("SELF::intersectionsWithRay");
 	vector<Plane> planes;
 	planes.resize(6);
 
@@ -75,6 +73,7 @@ bool Voxel::intersectionsWithRay( const MPoint& src, const MVector& dirVec, MPoi
 	}
 	if(count != 2)
 	{
+		//Profiler::finishTimer("SELF::intersectionsWithRay");
 		return false;
 	}
 	if(times[0] < times[1])
@@ -91,6 +90,7 @@ bool Voxel::intersectionsWithRay( const MPoint& src, const MVector& dirVec, MPoi
 		farInt = ints[0];
 		farDir = dirs[0];
 	}
+	//Profiler::finishTimer("SELF::intersectionsWithRay");
 	return true;
 }
 
