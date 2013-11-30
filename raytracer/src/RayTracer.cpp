@@ -306,12 +306,12 @@ void RayTracer::storeMeshTexturingData(MeshDataT& m)
 		MPlug shaderPlug = shaderGroup.findPlug("surfaceShader");
 		shaderPlug.connectedTo(connections, true, false);
 		for(uint u = 0; u < connections.length(); u++)
-		{
+		{ 
 			if(connections[u].node().hasFn(MFn::kLambert))
 			{
 				MFnLambertShader lambertShader(connections[u].node());
-				MImage textureImage;
-				if (getLambertShaderTexture(lambertShader, textureImage)) 
+				MImage* textureImage = new MImage();
+				if (getLambertShaderTexture(lambertShader, *textureImage)) 
 				{
 					// store the texture image
 					m.texture = textureImage;
@@ -883,8 +883,8 @@ MColor RayTracer::calculatePixelColor(const int x, const int y, const int z,cons
 		mesh.getPolygonUV(innerFaceId, vi, us[vi], vs[vi]);
 	}
 
-	double u,v,w;
-	caclulateBaricentricCoordinates(triangleVertices, intersection, u, v, w);
+	double baricentricCoords[3];
+	caclulateBaricentricCoordinates(triangleVertices, intersection, baricentricCoords );
 	//return MColor(u,v,w, 1);
 
 	MColor	specularMaterialColor	=	meshesData[meshIndex].specular;
@@ -894,15 +894,33 @@ MColor RayTracer::calculatePixelColor(const int x, const int y, const int z,cons
 	if (meshesData[meshIndex].hasTexture) 
 	{
 		// get texture color at point using u,v,w and bilinear filter
+		unsigned int width, height;
+		meshesData[meshIndex].texture->getSize(width, height);
+		int depth = meshesData[meshIndex].texture->depth();
+
+		float u = 0,v = 0;
+		for (int z = 0; z < 3; ++z)
+		{
+			u += baricentricCoords[z] * us[z];
+			v += baricentricCoords[z] * vs[z];
+		}
+		unsigned char * pixs = meshesData[meshIndex].texture->pixels();
+		if(meshesData[meshIndex].texture->pixelType() == MImage::MPixelType::kByte )
+		{
+			int x = (int)((width - 1) * u);
+			int y = (int)((height - 1) * v);
+			
+			diffuseMaterialColor. r = (float)(pixs[(y* width + x)*4] / 255);
+			diffuseMaterialColor. g = (float)(pixs[(y* width + x)*4 + 1] / 255);
+			diffuseMaterialColor. b = (float)(pixs[(y* width + x)*4 + 2]/ 255);
+		}
 	}
 	else 
 	{
 		diffuseMaterialColor = meshesData[meshIndex].diffuse;
 	}
 
-	
-
-	MVector normalAtPoint = (u * triangleNormals[0] + v * triangleNormals[1] + w * triangleNormals[2]).normal();
+	MVector normalAtPoint = (baricentricCoords[0] * triangleNormals[0] + baricentricCoords[1] * triangleNormals[1] + baricentricCoords[2] * triangleNormals[2]).normal();
 	MColor pixelColor = MColor(0,0,0,1);
 
 	LightDataT currLight;
@@ -943,11 +961,6 @@ MColor RayTracer::calculatePixelColor(const int x, const int y, const int z,cons
 			}
 			pixelColor = sumColors(calculateSpecularAndDiffuse(rayDirection, lightDirectionNormalized, normalAtPoint, mixedDiffuse, mixedSpecular, specularPower), pixelColor) ;
 		}
-	}
-
-	if(pixelColor.r > 0.5 && pixelColor.b > 0.5 && pixelColor.g < 0.5)
-	{
-		return MColor(0.25, 0.25, 0.25);
 	}
 
 	return pixelColor;

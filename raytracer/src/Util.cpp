@@ -539,7 +539,7 @@ namespace util
 
 	}
 
-	void caclulateBaricentricCoordinates( MPoint triangleVertices[3], MPoint point, double& u, double& v, double& w )
+	void caclulateBaricentricCoordinates( MPoint triangleVertices[3], MPoint point, double baricentricCoords[3] )
 	{
 		MVector e01 = (triangleVertices[1] - triangleVertices[0]);
 		MVector e02 = (triangleVertices[2] - triangleVertices[0]);
@@ -550,9 +550,9 @@ namespace util
 		MVector pv1 = triangleVertices[1] - point;
 		MVector pv2 = triangleVertices[2] - point;
 
-		u = ((pv2 ^ pv1).length() * 0.5 ) / triArea;
-		v = ((pv0 ^ pv2).length() * 0.5 ) / triArea;
-		w = ((pv1 ^ pv0).length() * 0.5 ) / triArea;
+		baricentricCoords[0] = ((pv2 ^ pv1).length() * 0.5 ) / triArea;
+		baricentricCoords[1] = ((pv0 ^ pv2).length() * 0.5 ) / triArea;
+		baricentricCoords[2] = ((pv1 ^ pv0).length() * 0.5 ) / triArea;
 	}
 
 	MVector reflectedRay( MVector ligthDir, MVector normal )
