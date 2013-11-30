@@ -31,11 +31,14 @@ public:
 class Profiler
 {
 	static map<string, Timer> idToTimer;
+	static map<string, long> idToCounter;
 	public:
 
 	static void startTimer(string id);
 
 	static void finishTimer(string id);
+
+	static void increaseCounter(string id, long i = 1);
 
 	static void printReport();
 

@@ -2,7 +2,10 @@
 
 #include <maya/MPoint.h>
 #include <maya/MDagPath.h>
+#include <maya/MItMeshPolygon.h>
 #include <vector>
+#include "Plane.h"
+#include "Profiler.h"
 #include "Util.h"
 
 using std::vector;

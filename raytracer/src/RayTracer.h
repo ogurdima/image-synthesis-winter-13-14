@@ -59,28 +59,19 @@ using namespace util;
 
 class RayTracer : public MPxCommand
 {
-
-
-
 	MPoint minScene;
 	MPoint maxScene;
 	vector<Plane> sceneBBPlanes;
 
-
 	int imgWidth;
 	int imgHeight;
-
 	bool cameraInSceneBB;
 	int initCameraVoxelX;
 	int initCameraVoxelY;
 	int initCameraVoxelZ;
-
 	int supersamplingCoeff;
+	char* outputFilePath;
 
-
-	
-
-	
 
 	struct CameraDataT
 	{
@@ -185,7 +176,6 @@ class RayTracer : public MPxCommand
 
 	vector<VoxelDataT> voxelsData;
 
-
 public:
 
 	RayTracer();
@@ -207,9 +197,9 @@ public:
 	void voxelizeScene();
 	void computeAndStoreVoxelParams();
 	void computeAndStoreRawVoxelsData();
-	void computeVoxelNeighborhoodData();
 	void computeVoxelMeshBboxIntersections();
 	void bresenhaim();
+	void openImageInMaya();
 
 	void storeMeshTexturingData(MeshDataT& m);
 
@@ -222,13 +212,15 @@ public:
 	bool findIndecesByDimension(const MPoint& point, AxisDirection direction,  int& x, int& y, int& z );
 
 	void initIndeces( AxisDirection direction, int& x, int& y, int& z );
+
 	void orthonormalDirections( AxisDirection direction, AxisDirection& uDirection, AxisDirection& vDirection );
+
 	bool pointInVoxelByDirection( const MPoint& closestIntersection,VoxelDataT voxel, AxisDirection uDirection );
+
 	void incrementIndeces( AxisDirection uDirection, int& x, int& y, int& z );
 	
 	MColor calculatePixelColor(const int x, const int y, const int z,const MVector& rayDirection, const int meshIndex,const int innerFaceId,const MPoint& intersection );
 
 	MColor calculateSpecularAndDiffuse(const MVector& viewDirection, MVector lightDirection,  MVector normalAtPoint, MColor mixedDiffuse, MColor mixedSpecular, float specularPower);
-
 
 };

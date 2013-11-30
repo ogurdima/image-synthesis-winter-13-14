@@ -22,7 +22,7 @@
 #include <maya/MPlug.h>
 #include <maya/MPlugArray.h>
 #include "Definitions.h"
-
+#include "Profiler.h"
 
 using std::vector;
 using std::string;
@@ -56,6 +56,7 @@ namespace util
 	bool							getLambertShaderTexture(MFnLambertShader& lambert, MImage& img);
 
 	MColor							sumColors(const MColor& c1 , const MColor& c2);
+	MColor							textureNearesNeighborAtPoint(const MImage* texture, double u, double v, bool repeat = true);
 
 };
 
