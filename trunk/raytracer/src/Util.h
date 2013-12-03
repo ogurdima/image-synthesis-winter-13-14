@@ -51,12 +51,14 @@ namespace util
 	bool							triangleBoxOverlap( const MPoint& center , const double boxhalfsize[3], const MPointArray& triangleVertices);
 	bool							rayIntersectsTriangle(const MPoint& raySrc,const MVector& rayDirection, const MPoint triangleVertices[3], double& time, MPoint& intersection);
 	MVector							reflectedRay(const MVector& ligthDir,const MVector& normal);
+	MVector							halfVector(const MVector& lightDir, const MVector& viewdDir );
 	void							caclulateBaricentricCoordinates( MPoint triangleVertices[3], MPoint point, double baricentricCoords[3] );
 
 	bool							getLambertShaderTexture(MFnLambertShader& lambert, MImage& img);
 
 	MColor							sumColors(const MColor& c1 , const MColor& c2);
 	MColor							textureNearesNeighborAtPoint(const MImage* texture, double u, double v, bool repeat = true);
+	MColor							getBilinearFilteredPixelColor(const MImage* texture, double u, double v);
 
 };
 

@@ -15,6 +15,7 @@ void Profiler::printReport()
 	for(map<string, Timer>::iterator iter = idToTimer.begin(); iter != idToTimer.end(); ++iter)
 	{
 		cout << "---" << iter->first << "::::" << iter->second << endl;
+
 	}
 	cout << "------------------------------------------" << endl;
 	for(map<string, long>::iterator iter = idToCounter.begin(); iter != idToCounter.end(); ++iter)
@@ -24,11 +25,12 @@ void Profiler::printReport()
 	cout << "End of profiling report!!!" << endl;
 }
 
-void Profiler::finishTimer( string id )
+double Profiler::finishTimer( string id )
 {
 	idToTimer[id].timer.endTimer();
 	idToTimer[id].time += idToTimer[id].timer.elapsedTime();
 	idToTimer[id].count ++;
+	return idToTimer[id].timer.elapsedTime();
 }
 
 void Profiler::startTimer( string id )
@@ -50,9 +52,4 @@ void Profiler::clear()
 	idToCounter.clear();
 }
 
-#ifdef _DEBUG
 
-#else
-	// make sure that all profilers deleted from other places	
-	;lkajsdf;j;
-#endif

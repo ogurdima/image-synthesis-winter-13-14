@@ -234,37 +234,28 @@ namespace util
 		return res;
 	}
 
-	MColor textureBilinearInterpolationAtPoint(const MImage* texture, double u, double v, bool repeat)
+	MColor getBilinearFilteredPixelColor( const MImage* texture, double u, double v )
 	{
+		unsigned int w, h;
 		MColor res = MColor(0,0,0);
 		unsigned char * pixs = texture->pixels();
-		unsigned int width, height;
-		texture->getSize(width, height);
-
-		double fixedU, fixedV;
-		if (repeat) {
-			fixedU = fmod(u, 1.0);
-			fixedV = fmod(v, 1.0);
-		}
-		else {
-			fixedU = (u < 0) ? 0 : (u > 1) ? 1 : u;
-			fixedV = (v < 0) ? 0 : (v > 1) ? 1 : v;
-		}
-
-		if(texture->pixelType() == MImage::MPixelType::kByte )
+		texture->getSize(w, h);
+		u = u * (w - 1) - 0.5;
+		v = v * (h - 1) - 0.5;
+		int x = max((int) floor(u), 0);
+		int y = max((int) floor(v), 0);
+		int xNext = min(x + 1, w - 1);
+		int yNext = min(y + 1, h - 1);
+		double u_ratio = u - x;
+		double v_ratio = v - y; 
+		double u_opposite = 1 - u_ratio;
+		double v_opposite = 1 - v_ratio;
+		for (int i = 0; i < 3; ++i)
 		{
-			int x = (int) ( ((double)(width - 1) * fixedU) + 0.49 );
-			int y = (int) ( ((double)(height - 1) * fixedV) + 0.49 );
-			
-			//double xBack = (double)(x) / (double)(width - 1);
-			//double yBack = (double)(y) / (double)(height - 1);
-
-
-
-			res.r = (float) ((float)pixs[(y * width + x)*4] / 255.0);
-			res.g = (float) ((float)pixs[(y * width + x)*4 + 1] / 255.0);
-			res.b = (float) ((float)pixs[(y * width + x)*4 + 2]/ 255.0);
+			res[i] = ( ((float)pixs[(y * w + x)*4 +i] / 255.0)   * u_opposite  + ((float)pixs[(y * w + xNext)*4 + i] / 255.0)   * u_ratio) * v_opposite +
+				(((float)pixs[((yNext) * w + x)*4 + i] / 255.0) * u_opposite  + ((float)pixs[(yNext * w + xNext)*4 + i] / 255.0) * u_ratio) * v_ratio;
 		}
+		
 		return res;
 	}
 
@@ -409,6 +400,11 @@ namespace util
 	MVector reflectedRay(const MVector& ligthDir, const MVector& normal )
 	{
 		return (ligthDir - 2 * normal * ( ligthDir * normal)).normal();
+	}
+
+	MVector halfVector(const MVector& lightDir, const MVector& viewdDir )
+	{
+		return (lightDir + viewdDir).normal();
 	}
 
 	MColor sumColors( const MColor& c1 , const MColor& c2 )
@@ -627,6 +623,9 @@ namespace util
 		Profiler::finishTimer("SELF::triangleBoxOverlap");
 		return res;
 	}
+
+	
+
 #pragma endregion
 
 }

@@ -36,7 +36,7 @@ class Profiler
 
 	static void startTimer(string id);
 
-	static void finishTimer(string id);
+	static double finishTimer(string id);
 
 	static void increaseCounter(string id, long i = 1);
 

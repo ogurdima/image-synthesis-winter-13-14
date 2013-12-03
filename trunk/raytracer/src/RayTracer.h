@@ -30,10 +30,12 @@
 #include <maya/MPlugArray.h>
 #include <maya/MFnLambertShader.h>
 #include <maya/MFnReflectShader.h>
+#include <maya/MFnBlinnShader.h>
 #include <maya/MFnPhongShader.h>
 #include <vector>
 #include <string>
 #include <sstream>
+#include <fstream>
 #include "Plane.h"
 #include "Definitions.h"
 #include <map>
@@ -70,8 +72,20 @@ class RayTracer : public MPxCommand
 	int initCameraVoxelY;
 	int initCameraVoxelZ;
 	int supersamplingCoeff;
-	char* outputFilePath;
 
+	static char* outputFilePath;
+	static char* statisticsFilePath;
+
+	static double prepTime;
+	static double totalTime;
+	static double timePerPixel;
+	static double timePerPixelStandardDeviation;
+	static long intersectionTestCount;
+	static long intersectionFoundCount; 
+	static long voxelsTraversed;
+	static long totalRayCount;
+	static long totalPolyCount;
+	 
 
 	struct CameraDataT
 	{
@@ -80,7 +94,7 @@ class RayTracer : public MPxCommand
 		MVector		upDir;
 		double		focalLengthCm;
 		double		filmWidthCm;
-
+		bool		isPerspective;
 		MString		toString() {
 			ostringstream os;
 			os << "Camera: Eye:" << pointToString(eye) << ",View:" << vectorToString(viewDir) << ",Up:" 
@@ -143,6 +157,9 @@ class RayTracer : public MPxCommand
 		MColor		specular;
 		MColor		ambient;
 		float		specularPower;
+
+		bool		useHalfVector;
+		float		eccentricity;
 		
 	};
 
@@ -202,10 +219,11 @@ class RayTracer : public MPxCommand
 			default:
 				break;
 			}
+			voxelsTraversed++;
 		}
 
 
-	} voxelParams;
+	} sceneParams;
 
 	struct VoxelDataT
 	{
@@ -244,6 +262,7 @@ public:
 	void computeVoxelMeshBboxIntersections();
 	void bresenhaim();
 	void openImageInMaya();
+	void printStatisticsReport();
 
 	void storeMeshTexturingData(MeshDataT& m);
 
@@ -251,7 +270,7 @@ public:
 
 	bool closestIntersectionInVoxel( MPoint raySource, MVector rayDirection, VoxelDataT &voxelData, int &meshIndex, int &innerFaceId, MPoint &intersection  );
 
-	bool findStartingVoxelIndeces(const MVector& rayDirection, int& bx, int& by, int& bz);
+	bool findStartingVoxelIndeces(const MPoint& raySrc, const MVector& rayDirection, int& bx, int& by, int& bz);
 
 	bool findIndecesByDimension(const MPoint& point, AxisDirection direction,  int& x, int& y, int& z );
 
@@ -265,6 +284,6 @@ public:
 	
 	MColor calculatePixelColor(const int x, const int y, const int z,const MVector& rayDirection, const int meshIndex,const int innerFaceId,const MPoint& intersection );
 
-	MColor calculateSpecularAndDiffuse(const MVector& viewDirection, MVector lightDirection,  MVector normalAtPoint, MColor mixedDiffuse, MColor mixedSpecular, float specularPower);
+	MColor calculateSpecularAndDiffuse(const MVector& viewDirection, MVector& lightDirection,  MVector& normalAtPoint, MColor& mixedDiffuse, MColor& mixedSpecular, float specularPower, bool useHalfVector, float eccentricity);
 
 };

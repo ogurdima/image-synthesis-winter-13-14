@@ -35,6 +35,6 @@ public:
 
 	bool		intersectsWith(MPoint otherMin, MPoint otherMax);
 	bool		intersectsWith(const MDagPath& meshPath,const double halfsSides[3], vector<int>& faceIds) const;
-	bool		intersectionsWithRay(const MPoint& src, const MVector& dir, MPoint & nearInt, AxisDirection& nearDir, MPoint farInt, AxisDirection& farDir);
+	bool		findExitDirection(const MPoint& src, const MVector& dir, AxisDirection& farDir);
 };
 
