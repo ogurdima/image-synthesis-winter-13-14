@@ -244,16 +244,16 @@ namespace util
 		v = v * (h - 1) - 0.5;
 		int x = max((int) floor(u), 0);
 		int y = max((int) floor(v), 0);
-		int xNext = min(x + 1, w - 1);
-		int yNext = min(y + 1, h - 1);
+		int xNext = min(x + 1, (int)w - 1);
+		int yNext = min(y + 1, (int)h - 1);
 		double u_ratio = u - x;
 		double v_ratio = v - y; 
 		double u_opposite = 1 - u_ratio;
 		double v_opposite = 1 - v_ratio;
 		for (int i = 0; i < 3; ++i)
 		{
-			res[i] = ( ((float)pixs[(y * w + x)*4 +i] / 255.0)   * u_opposite  + ((float)pixs[(y * w + xNext)*4 + i] / 255.0)   * u_ratio) * v_opposite +
-				(((float)pixs[((yNext) * w + x)*4 + i] / 255.0) * u_opposite  + ((float)pixs[(yNext * w + xNext)*4 + i] / 255.0) * u_ratio) * v_ratio;
+			res[i] = (float)(( ((float)pixs[(y * w + x)*4 +i] / 255.0)   * u_opposite  + ((float)pixs[(y * w + xNext)*4 + i] / 255.0)   * u_ratio) * v_opposite +
+				(((float)pixs[((yNext) * w + x)*4 + i] / 255.0) * u_opposite  + ((float)pixs[(yNext * w + xNext)*4 + i] / 255.0) * u_ratio) * v_ratio);
 		}
 		
 		return res;
@@ -261,127 +261,44 @@ namespace util
 
 	bool rayIntersectsTriangle(const MPoint& raySrc,const MVector& rayDirection, const MPoint triangleVertices[3], double& time, MPoint& intersection) 
 	{
-		//Profiler::startTimer("SELF::rayIntersectsTriangle");
-		//float e1[3],e2[3],h[3],s[3],q[3];
-
 		double a,f,u,v;
-
 		MVector edge01(triangleVertices[1] - triangleVertices[0]);
 		MVector edge02(triangleVertices[2] - triangleVertices[0]);
-		//vector(e1,v1,v0);
-		//vector(e2,v2,v0);
-
 		MVector h = rayDirection ^ edge02;
 		a = edge01 * h;
-		//crossProduct(h,d,e2);
-		//a = innerProduct(e1,h);
-
 		if (abs(a) < DOUBLE_NUMERICAL_THRESHHOLD) {
-			//Profiler::finishTimer("SELF::rayIntersectsTriangle");
 			return(false);
 		}
-
 		f = 1/a;
-		//vector(s,p,v0);
-
 		MVector s = raySrc - triangleVertices[0];
-
 		u = f * (s * h);
 
-		//u = f * (innerProduct(s,h));
-
 		if (u < 0.0 || u > 1.0) {
-			//Profiler::finishTimer("SELF::rayIntersectsTriangle");
 			return(false);
 		}
-
 		MVector q = s ^ edge01;
 		v = f * (rayDirection * q);
-		//crossProduct(q,s,e1);
-		//v = f * innerProduct(d,q);
-
 		if (v < 0.0 || u + v > 1.0) {
-			//Profiler::finishTimer("SELF::rayIntersectsTriangle");
 			return(false);
 		}
-
 		// at this stage we can compute t to find out where
 		// the intersection point is on the line
 		//double t = f * innerProduct(e2,q);
-
 		double localTime = f * (edge02 * q);
 		if (localTime > DOUBLE_NUMERICAL_THRESHHOLD) // ray intersection
 		{
 			time = localTime;
 			intersection = raySrc + time * rayDirection;
-			//Profiler::finishTimer("SELF::rayIntersectsTriangle");
 			return true;
 		}
 		else {
 			// this means that there is a line intersection
 			// but not a ray intersection
-			//Profiler::finishTimer("SELF::rayIntersectsTriangle");
 			return false;
 		}
-
 	}
 
-	//bool rayIntersectsTriangle2(const MPoint raySrc,const MVector rayDirection, const MPoint triangleVertices[3], double& time, MPoint& intersection) 
-	//{
-	//	//float e1[3],e2[3],h[3],s[3],q[3];
-
-	//	double a,f,u,v;
-
-	//	MVector edge01(triangleVertices[1] - triangleVertices[0]);
-	//	MVector edge02(triangleVertices[2] - triangleVertices[0]);
-	//	//vector(e1,v1,v0);
-	//	//vector(e2,v2,v0);
-
-	//	MVector h = rayDirection ^ edge02;
-	//	a = edge01 * h;
-	//	//crossProduct(h,d,e2);
-	//	//a = innerProduct(e1,h);
-
-	//	if (abs(a) < DOUBLE_NUMERICAL_THRESHHOLD)
-	//		return(false);
-
-	//	f = 1/a;
-	//	//vector(s,p,v0);
-
-	//	MVector s = raySrc - triangleVertices[0];
-
-	//	u = f * (s * h);
-
-	//	//u = f * (innerProduct(s,h));
-
-	//	if (u < 0.0 || u > 1.0)
-	//		return(false);
-
-	//	MVector q = s ^ edge01;
-	//	v = f * (rayDirection * q);
-	//	//crossProduct(q,s,e1);
-	//	//v = f * innerProduct(d,q);
-
-	//	if (v < 0.0 || u + v > 1.0)
-	//		return(false);
-
-	//	// at this stage we can compute t to find out where
-	//	// the intersection point is on the line
-	//	//double t = f * innerProduct(e2,q);
-	//	time = f * (edge02 * q);
-
-	//	if (time > DOUBLE_NUMERICAL_THRESHHOLD) // ray intersection
-	//	{
-	//		intersection = raySrc + time * rayDirection;
-	//		return(true);
-	//	}
-	//	else // this means that there is a line intersection
-	//		// but not a ray intersection
-	//		return (false);
-
-	//}
-
-	void caclulateBaricentricCoordinates( MPoint triangleVertices[3], MPoint point, double baricentricCoords[3] )
+	void caclulateBaricentricCoordinates( MPoint triangleVertices[3], const MPoint& point, double baricentricCoords[3] )
 	{
 		MVector e01 = (triangleVertices[1] - triangleVertices[0]);
 		MVector e02 = (triangleVertices[2] - triangleVertices[0]);
@@ -512,20 +429,20 @@ namespace util
 		MPoint vmin, vmax;
 		for(q=X;q<=Z;q++)
 		{
-			v=point[q];					// -NJMP-
+			v=point[q];					
 			if(normal[q]>0.0f)
 			{
-				vmin[q]=-halfBox[q] - v;	// -NJMP-
-				vmax[q]= halfBox[q] - v;	// -NJMP-
+				vmin[q]=-halfBox[q] - v;	
+				vmax[q]= halfBox[q] - v;	
 			}
 			else
 			{
-				vmin[q]= halfBox[q] - v;	// -NJMP-
-				vmax[q]=-halfBox[q] - v;	// -NJMP-
+				vmin[q]= halfBox[q] - v;	
+				vmax[q]=-halfBox[q] - v;	
 			}
 		}
-		if((normal * vmin) > 0.0f) return false;	// -NJMP-
-		if((normal * vmax) >= 0.0f) return true;	// -NJMP-
+		if((normal * vmin) > 0.0f) return false;	
+		if((normal * vmax) >= 0.0f) return true;	
 		return false;
 	}
 
@@ -542,7 +459,7 @@ namespace util
 			return false;
 
 		MPoint tvs[3];
-		register double minVal,maxVal,p0,p1,p2,rad,fex,fey,fez;		// -NJMP- "d" local variable removed
+		register double minVal,maxVal,p0,p1,p2,rad,fex,fey,fez;		
 		MVector norm, edges[3];
 
 		/* This is the fastest branch on Sun */
@@ -608,8 +525,7 @@ namespace util
 		/*  compute plane equation of triangle: normal*x+d=0 */
 
 		norm = edges[0] ^ edges[1];
-		// -NJMP- (line removed here)
-		if(!planeBoxOverlap(norm, tvs[0], boxhalfsize)) return false;	// -NJMP-
+		if(!planeBoxOverlap(norm, tvs[0], boxhalfsize)) return false;
 
 		return true;   /* box and triangle overlaps */
 

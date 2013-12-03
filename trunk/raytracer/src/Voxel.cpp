@@ -55,7 +55,7 @@ Voxel::~Voxel(void)
 
 bool Voxel::findExitDirection( const MPoint& src, const MVector& dirVec, AxisDirection& farDir )
 {
-	//Profiler::startTimer("SELF::intersectionsWithRay");
+
 	
 	double times[2];
 	AxisDirection dirs[2];
@@ -73,7 +73,7 @@ bool Voxel::findExitDirection( const MPoint& src, const MVector& dirVec, AxisDir
 	}
 	if(count != 2)
 	{
-		//Profiler::finishTimer("SELF::intersectionsWithRay");
+
 		return false;
 	}
 	if(times[0] < times[1])
@@ -84,7 +84,7 @@ bool Voxel::findExitDirection( const MPoint& src, const MVector& dirVec, AxisDir
 	{
 		farDir = dirs[0];
 	}
-	//Profiler::finishTimer("SELF::intersectionsWithRay");
+
 	return true;
 }
 

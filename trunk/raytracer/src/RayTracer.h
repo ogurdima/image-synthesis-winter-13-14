@@ -34,12 +34,11 @@
 #include <maya/MFnPhongShader.h>
 #include <vector>
 #include <string>
+#include <map>
 #include <sstream>
 #include <fstream>
 #include "Plane.h"
 #include "Definitions.h"
-#include <map>
-
 #include "Util.h"
 #include "Voxel.h"
 
@@ -86,7 +85,6 @@ class RayTracer : public MPxCommand
 	static long totalRayCount;
 	static long totalPolyCount;
 	 
-
 	struct CameraDataT
 	{
 		MPoint		eye;
@@ -246,9 +244,7 @@ public:
 
 	void triangulateMesh(const MFnMesh& mesh);
 	void storeActiveCameraData();
-
-	void StoreCameraData( MFnCamera &camera );
-
+	void storeCameraData( MFnCamera &camera );
 	void computeAndStoreImagePlaneData();
 	void storeLightingData();
 	void storeAmbientLight(MDagPath lightDagPath);
@@ -268,7 +264,7 @@ public:
 
 	bool closestIntersection(const int dimension,const MPoint& raySource,const MVector& rayDirection,int& x,int& y,int& z , int& meshIndex, int& innerFaceId, MPoint& intersection  );
 
-	bool closestIntersectionInVoxel( MPoint raySource, MVector rayDirection, VoxelDataT &voxelData, int &meshIndex, int &innerFaceId, MPoint &intersection  );
+	bool closestIntersectionInVoxel(const MPoint& raySource, const MVector& rayDirection, VoxelDataT &voxelData, int &meshIndex, int &innerFaceId, MPoint &intersection);
 
 	bool findStartingVoxelIndeces(const MPoint& raySrc, const MVector& rayDirection, int& bx, int& by, int& bz);
 
