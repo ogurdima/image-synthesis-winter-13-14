@@ -53,20 +53,20 @@ Voxel::~Voxel(void)
 {
 };
 
-bool Voxel::intersectionsWithRay( const MPoint& src, const MVector& dirVec, MPoint & nearInt, AxisDirection& nearDir, MPoint farInt, AxisDirection& farDir )
+bool Voxel::findExitDirection( const MPoint& src, const MVector& dirVec, AxisDirection& farDir )
 {
 	//Profiler::startTimer("SELF::intersectionsWithRay");
 	
 	double times[2];
 	AxisDirection dirs[2];
-	MPoint ints[2];
+	MPoint intersection;
 	int count = 0;
 
 	for (int i = 0; i < UNKNOWN_DIR && count < 2; ++i)
 	{
 		dirs[count] = (AxisDirection) i;
-		if( planes[i].rayIntersection(src, dirVec, times[count], ints[count]) 
-			&& pointInRectangle(dirs[count], ints[count],  min , max))
+		if( planes[i].rayIntersection(src, dirVec, times[count], intersection) 
+			&& pointInRectangle(dirs[count], intersection,  min , max))
 		{
 			 count++;
 		}
@@ -78,16 +78,10 @@ bool Voxel::intersectionsWithRay( const MPoint& src, const MVector& dirVec, MPoi
 	}
 	if(times[0] < times[1])
 	{
-		nearInt = ints[0];
-		nearDir = dirs[0];
-		farInt = ints[1];
 		farDir = dirs[1];
 	}
 	else
 	{
-		nearInt = ints[1];
-		nearDir = dirs[1];
-		farInt = ints[0];
 		farDir = dirs[0];
 	}
 	//Profiler::finishTimer("SELF::intersectionsWithRay");
