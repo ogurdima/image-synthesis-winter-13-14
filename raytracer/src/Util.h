@@ -38,21 +38,19 @@ namespace util
 	MString							pointToString(MPoint p);
 	MString							vectorToString(MVector p);
 	MString							colorToString(MColor c);
-	//MMatrix							getDagPathTransformationMatrix(MDagPath dagPath, MStatus* statusPtr);
 	pair<MPoint, MPoint>			computeWfAxisAlignedBoundingBox(MDagPath meshPath, MStatus* statusPtr = NULL);
 	inline double					minimize(double* oldPtr, double newVal);
 	inline double					maximize(double* oldPtr, double newVal);
 
 	bool							valueInInterval(double value, double intervalMin, double intervalMax);
 	bool							intervalsOverlap(double x1, double y1, double x2, double y2);
-	//int								flatten3dCubeIndex(int dimSize, int x, int y, int z);
 	bool							pointInRectangle(AxisDirection projectionDirection, const MPoint& point, const MPoint& minPoint, const MPoint& maxPoint );
 	bool							isPointInVolume(const MPoint& point, const MPoint& minVolume, const MPoint& maxVolume);
 	bool							triangleBoxOverlap( const MPoint& center , const double boxhalfsize[3], const MPointArray& triangleVertices);
 	bool							rayIntersectsTriangle(const MPoint& raySrc,const MVector& rayDirection, const MPoint triangleVertices[3], double& time, MPoint& intersection);
 	MVector							reflectedRay(const MVector& ligthDir,const MVector& normal);
 	MVector							halfVector(const MVector& lightDir, const MVector& viewdDir );
-	void							caclulateBaricentricCoordinates( MPoint triangleVertices[3], MPoint point, double baricentricCoords[3] );
+	void							caclulateBaricentricCoordinates( MPoint triangleVertices[3], const MPoint& point, double baricentricCoords[3] );
 
 	bool							getLambertShaderTexture(MFnLambertShader& lambert, MImage& img);
 

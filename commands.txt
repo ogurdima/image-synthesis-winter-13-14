@@ -1,0 +1,7 @@
+raytrace -w 640 -h 480 -s 1 -n 10
+
+raytrace -w 800 -h 600 -s 1 -n 20
+
+raytrace -w 800 -h 600 -s 2 -n 20
+
+raytrace -w 1920 -h 1080 -s 1 -n 30
