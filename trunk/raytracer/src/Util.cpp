@@ -6,8 +6,6 @@
 namespace util 
 {
 
-	bool inner_triangleBoxOverlap( const MPoint center , const double boxhalfsize[3], const MPointArray triangleVertices);
-
 	MString pointToString(MPoint p)
 	{
 		MString outstr;
@@ -157,11 +155,6 @@ namespace util
 		return true;			
 	}
 
-	int	flatten3dCubeIndex(int dimSize, int x, int y, int z)
-	{
-		return x + dimSize*y + dimSize*dimSize*z;
-	}
-
 	bool isPointInVolume(const MPoint& point, const MPoint& minVolume, const MPoint& maxVolume)
 	{
 		for(int i = 0; i < 3; ++i)
@@ -177,7 +170,7 @@ namespace util
 		return !( value < intervalMin || value > intervalMax);
 	}
 
-	bool pointInRectangle( AxisDirection projectionDirection, const MPoint point, const MPoint minPoint, const MPoint maxPoint )
+	bool pointInRectangle( AxisDirection projectionDirection, const MPoint& point, const MPoint& minPoint, const MPoint& maxPoint )
 	{
 		switch (projectionDirection)
 		{
@@ -275,15 +268,7 @@ namespace util
 		return res;
 	}
 
-	bool triangleBoxOverlap( const MPoint center , const double boxhalfsize[3], const MPointArray triangleVertices)
-	{
-		Profiler::startTimer("SELF::triangleBoxOverlap");
-		bool res = inner_triangleBoxOverlap(center, boxhalfsize, triangleVertices);
-		Profiler::finishTimer("SELF::triangleBoxOverlap");
-		return res;
-	}
-
-	bool rayIntersectsTriangle(const MPoint raySrc,const MVector rayDirection, const MPoint triangleVertices[3], double& time, MPoint& intersection) 
+	bool rayIntersectsTriangle(const MPoint& raySrc,const MVector& rayDirection, const MPoint triangleVertices[3], double& time, MPoint& intersection) 
 	{
 		//Profiler::startTimer("SELF::rayIntersectsTriangle");
 		//float e1[3],e2[3],h[3],s[3],q[3];
@@ -350,60 +335,60 @@ namespace util
 
 	}
 
-	bool rayIntersectsTriangle2(const MPoint raySrc,const MVector rayDirection, const MPoint triangleVertices[3], double& time, MPoint& intersection) 
-	{
-		//float e1[3],e2[3],h[3],s[3],q[3];
+	//bool rayIntersectsTriangle2(const MPoint raySrc,const MVector rayDirection, const MPoint triangleVertices[3], double& time, MPoint& intersection) 
+	//{
+	//	//float e1[3],e2[3],h[3],s[3],q[3];
 
-		double a,f,u,v;
+	//	double a,f,u,v;
 
-		MVector edge01(triangleVertices[1] - triangleVertices[0]);
-		MVector edge02(triangleVertices[2] - triangleVertices[0]);
-		//vector(e1,v1,v0);
-		//vector(e2,v2,v0);
+	//	MVector edge01(triangleVertices[1] - triangleVertices[0]);
+	//	MVector edge02(triangleVertices[2] - triangleVertices[0]);
+	//	//vector(e1,v1,v0);
+	//	//vector(e2,v2,v0);
 
-		MVector h = rayDirection ^ edge02;
-		a = edge01 * h;
-		//crossProduct(h,d,e2);
-		//a = innerProduct(e1,h);
+	//	MVector h = rayDirection ^ edge02;
+	//	a = edge01 * h;
+	//	//crossProduct(h,d,e2);
+	//	//a = innerProduct(e1,h);
 
-		if (abs(a) < DOUBLE_NUMERICAL_THRESHHOLD)
-			return(false);
+	//	if (abs(a) < DOUBLE_NUMERICAL_THRESHHOLD)
+	//		return(false);
 
-		f = 1/a;
-		//vector(s,p,v0);
+	//	f = 1/a;
+	//	//vector(s,p,v0);
 
-		MVector s = raySrc - triangleVertices[0];
+	//	MVector s = raySrc - triangleVertices[0];
 
-		u = f * (s * h);
+	//	u = f * (s * h);
 
-		//u = f * (innerProduct(s,h));
+	//	//u = f * (innerProduct(s,h));
 
-		if (u < 0.0 || u > 1.0)
-			return(false);
+	//	if (u < 0.0 || u > 1.0)
+	//		return(false);
 
-		MVector q = s ^ edge01;
-		v = f * (rayDirection * q);
-		//crossProduct(q,s,e1);
-		//v = f * innerProduct(d,q);
+	//	MVector q = s ^ edge01;
+	//	v = f * (rayDirection * q);
+	//	//crossProduct(q,s,e1);
+	//	//v = f * innerProduct(d,q);
 
-		if (v < 0.0 || u + v > 1.0)
-			return(false);
+	//	if (v < 0.0 || u + v > 1.0)
+	//		return(false);
 
-		// at this stage we can compute t to find out where
-		// the intersection point is on the line
-		//double t = f * innerProduct(e2,q);
-		time = f * (edge02 * q);
+	//	// at this stage we can compute t to find out where
+	//	// the intersection point is on the line
+	//	//double t = f * innerProduct(e2,q);
+	//	time = f * (edge02 * q);
 
-		if (time > DOUBLE_NUMERICAL_THRESHHOLD) // ray intersection
-		{
-			intersection = raySrc + time * rayDirection;
-			return(true);
-		}
-		else // this means that there is a line intersection
-			// but not a ray intersection
-			return (false);
+	//	if (time > DOUBLE_NUMERICAL_THRESHHOLD) // ray intersection
+	//	{
+	//		intersection = raySrc + time * rayDirection;
+	//		return(true);
+	//	}
+	//	else // this means that there is a line intersection
+	//		// but not a ray intersection
+	//		return (false);
 
-	}
+	//}
 
 	void caclulateBaricentricCoordinates( MPoint triangleVertices[3], MPoint point, double baricentricCoords[3] )
 	{
@@ -421,11 +406,8 @@ namespace util
 		baricentricCoords[2] = ((pv1 ^ pv0).length() * 0.5 ) / triArea;
 	}
 
-	MVector reflectedRay( MVector ligthDir, MVector normal )
+	MVector reflectedRay(const MVector& ligthDir, const MVector& normal )
 	{
-		ligthDir.normalize();
-		normal.normalize();
-
 		return (ligthDir - 2 * normal * ( ligthDir * normal)).normal();
 	}
 
@@ -527,7 +509,7 @@ namespace util
 	rad = fa * boxhalfsize[X] + fb * boxhalfsize[Y];   \
 	if(minVal>rad || maxVal<-rad) return false;
 	
-	inline bool planeBoxOverlap(const MVector normal,const MPoint point, const double halfBox[3])	// -NJMP-
+	inline bool planeBoxOverlap(const MVector& normal,const MPoint& point, const double halfBox[3])	// -NJMP-
 	{
 		int q;
 		double v;
@@ -551,7 +533,7 @@ namespace util
 		return false;
 	}
 
-	bool inner_triangleBoxOverlap( const MPoint center , const double boxhalfsize[3], const MPointArray triangleVertices)
+	bool inner_triangleBoxOverlap( const MPoint& center , const double boxhalfsize[3], const MPointArray& triangleVertices)
 	{
 		/*    use separating axis theorem to test overlap between triangle and box */
 		/*    need to test for overlap in these directions: */
@@ -637,6 +619,14 @@ namespace util
 
 	}
 
+
+	bool triangleBoxOverlap( const MPoint& center , const double boxhalfsize[3], const MPointArray& triangleVertices)
+	{
+		Profiler::startTimer("SELF::triangleBoxOverlap");
+		bool res = inner_triangleBoxOverlap(center, boxhalfsize, triangleVertices);
+		Profiler::finishTimer("SELF::triangleBoxOverlap");
+		return res;
+	}
 #pragma endregion
 
 }
