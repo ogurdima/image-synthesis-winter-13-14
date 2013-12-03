@@ -17,6 +17,8 @@ class Voxel
 	MPoint		max;
 	MPoint		center;
 
+	vector<Plane> planes;
+
 public:
 	Voxel(MPoint _min, MPoint _max);
 	~Voxel(void);

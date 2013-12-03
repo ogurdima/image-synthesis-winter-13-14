@@ -2,8 +2,11 @@
 
 #include "Profiler.h"
 
+#ifdef PRINT_FOR_DEBUG
 #define PRINT_IN_MAYA(arg) MGlobal::displayInfo((arg));
+#endif
 
+const MString CAMERA_NAME = "cameraShape1";
 
 MStatus RayTracer::doIt(const MArgList& argList)
 {
@@ -75,6 +78,7 @@ bool RayTracer::parseArgs( const MArgList& args)
 		s = argData.getFlagArgument(voxelsFlag, 0, arg);	
 		if (s == MStatus::kSuccess) {
 			voxelParams.voxelsPerDimension = (arg < 1) ? 1 : arg;
+			voxelParams.voxelsPerDimensionSqr = voxelParams.voxelsPerDimension * voxelParams.voxelsPerDimension;
 		}
 	}
 
@@ -95,6 +99,7 @@ RayTracer::RayTracer()
 	imgWidth = 640;
 	imgHeight = 480;
 	voxelParams.voxelsPerDimension = 10;
+	voxelParams.voxelsPerDimensionSqr = 100;
 	supersamplingCoeff = 1;
 	outputFilePath = "C://temp//scene.iff";
 
@@ -152,19 +157,13 @@ void RayTracer::openImageInMaya()
 	MGlobal::executeCommand( cmd );
 }
 
-void RayTracer::storeActiveCameraData()
+void RayTracer::StoreCameraData( MFnCamera &camera )
 {
-	MDagPath cameraPath;
-	MStatus status;
-	M3dView::active3dView().getCamera( cameraPath );
-	MFnCamera camera(cameraPath, &status);
-	CHECK_MSTATUS(status);
 	MVector up = camera.upDirection(MSpace::kWorld);
 	up.normalize();
 	MVector view = camera.viewDirection(MSpace::kWorld);
 	view.normalize();
-	MVector eye = camera.eyePoint(MSpace::kWorld, &status);
-	CHECK_MSTATUS(status);
+	MVector eye = camera.eyePoint(MSpace::kWorld);
 	double focalMm = camera.focalLength();
 	double horizontalAperture = camera.horizontalFilmAperture();
 
@@ -173,8 +172,32 @@ void RayTracer::storeActiveCameraData()
 	activeCameraData.focalLengthCm = (focalMm / 10);
 	activeCameraData.upDir = up;
 	activeCameraData.viewDir = view;
+}
 
+void RayTracer::storeActiveCameraData()
+{
+
+	MItDag dagIterator(MItDag::kDepthFirst, MFn::kCamera);
+	for(; !dagIterator.isDone(); dagIterator.next())
+	{
+		MDagPath dagPath;
+		dagIterator.getPath(dagPath);
+		MFnCamera cur(dagPath);
+		if(cur.name() == CAMERA_NAME)
+		{
+			StoreCameraData(cur);
+			return;
+		}
+	}
+
+	MDagPath cameraPath;
+	M3dView::active3dView().getCamera( cameraPath );
+	MFnCamera camera(cameraPath);
+	StoreCameraData(camera);
+
+#ifdef PRINT_FOR_DEBUG
 	PRINT_IN_MAYA(activeCameraData.toString());
+#endif
 }
 
 void RayTracer::computeAndStoreImagePlaneData()
@@ -239,14 +262,18 @@ void RayTracer::storeLightingData()
 		}
 		else
 		{
+#ifdef PRINT_FOR_DEBUG
+
 			PRINT_IN_MAYA("Unsupported light");
+#endif
 		}
 	}
-
+#ifdef PRINT_FOR_DEBUG
 	for (int i = 0; i < lightingData.size(); i++)
 	{
 		PRINT_IN_MAYA(lightingData[i].toString());
 	}
+#endif
 }
 
 void RayTracer::storeAmbientLight(MDagPath lightDagPath)
@@ -386,7 +413,9 @@ void RayTracer::computeAndStoreMeshData()
 
 		MFnMesh meshFn(dagPath);
 		Profiler::increaseCounter("totalPolygons", meshFn.numPolygons());
+#ifdef PRINT_FOR_DEBUG
 		PRINT_IN_MAYA(MString("Storing mesh, bb is:") + pointToString(aMesh.min) + "," + pointToString(aMesh.max));
+#endif
 	}
 
 
@@ -421,7 +450,10 @@ void RayTracer::computeAndStoreSceneBoundingBox()
 	sceneBBPlanes[Z_NEG] = Plane(minScene, MVector(0,0, -1));
 	sceneBBPlanes[Z_POS] = Plane(maxScene, MVector(0,0,1));
 
+#ifdef PRINT_FOR_DEBUG
+
 	PRINT_IN_MAYA(MString("Scene, bb is:") + pointToString(minScene) + "," + pointToString(maxScene));
+#endif
 }
 
 void RayTracer::voxelizeScene()
@@ -490,7 +522,7 @@ void RayTracer::computeAndStoreRawVoxelsData()
 				Voxel* v = new Voxel(MPoint(x,y,z), MPoint(x + dx, y + dy, z + dz) );
 				VoxelDataT vd;
 				vd.v = v;
-				int index = flatten3dCubeIndex(sideCount, ix, iy, iz);
+				int index = voxelParams.flatten3dCubeIndex(ix, iy, iz);
 
 				if(cameraInSceneBB && isPointInVolume(activeCameraData.eye, v->Min(), v->Max()))
 				{
@@ -540,7 +572,9 @@ void RayTracer::computeVoxelMeshBboxIntersections()
 		out += count;
 		PRINT_IN_MAYA( out );*/
 	}
+#ifdef PRINT_FOR_DEBUG
 	PRINT_IN_MAYA((MString("TOTAL: ") + totalIntersections));
+#endif
 }
 
 void RayTracer::bresenhaim()
@@ -559,26 +593,31 @@ void RayTracer::bresenhaim()
 	int dimension = voxelParams.voxelsPerDimension;
 	MPoint raySource = activeCameraData.eye;
 
-	
-	for( int h = 0; h < imgHeight; ++h )
+	MPoint leftBottomOfPixel,bottomInPixel, leftBottomInPixel;
+	MPoint bottomOfPixel = imagePlane.lb;
+	int x, y, z;
+	MVector rayDirection;
+	int meshIntersectionIndex, innerFaceIntersectionIndex;
+	MPoint intersectionPoint;
+
+
+	for( int h = 0; h < imgHeight; ++h,bottomOfPixel += dy )
 	{
-		for( int w = 0; w < imgWidth; ++w )
+		leftBottomOfPixel = bottomOfPixel;
+		for( int w = 0; w < imgWidth; ++w , leftBottomOfPixel += dx)
 		{
 			Profiler::startTimer("bresenhaim::timePerPixel");
-			int meshIntersectionIndex, innerFaceIntersectionIndex;
-			MPoint intersectionPoint;
-			int x, y, z;
+			
 			MColor pixelColor;
-			MPoint rayOnImagePlane;
-			MVector rayDirection;
-
-			for (int sh = 1; sh <= supersamplingCoeff; sh++ )
+			
+			bottomInPixel = leftBottomOfPixel + ssdy + ssdx;
+			for (int sh = 1; sh <= supersamplingCoeff; sh++, bottomInPixel += ssdy )
 			{
-				for (int sw = 1; sw <= supersamplingCoeff; sw++)
+				leftBottomInPixel = bottomInPixel;
+				for (int sw = 1; sw <= supersamplingCoeff; sw++, leftBottomInPixel += ssdx)
 				{
-					rayOnImagePlane = imagePlane.lb + ( h * dy ) + (w * dx) + (sh * ssdy) + (sw * ssdx);
-					rayDirection = (rayOnImagePlane - activeCameraData.eye).normal();
 
+					rayDirection = (leftBottomInPixel - activeCameraData.eye).normal();
 
 					Profiler::startTimer("bresenhaim::findStartingVoxel");
 					bool foundStartingVoxel = findStartingVoxelIndeces(rayDirection, x, y, z);
@@ -596,7 +635,7 @@ void RayTracer::bresenhaim()
 						continue;
 					}
 					Profiler::startTimer("bresenhaim::calculatePixelColor");
-					pixelColor += (calculatePixelColor(x, y, z, rayDirection, meshIntersectionIndex, innerFaceIntersectionIndex, intersectionPoint) / (float)(supersamplingCoeff*supersamplingCoeff));
+					pixelColor = sumColors(pixelColor, (calculatePixelColor(x, y, z, rayDirection, meshIntersectionIndex, innerFaceIntersectionIndex, intersectionPoint) / (float)(supersamplingCoeff*supersamplingCoeff)));
 					Profiler::finishTimer("bresenhaim::calculatePixelColor");
 				}
 			}
@@ -662,17 +701,13 @@ bool RayTracer::findStartingVoxelIndeces(const MVector& rayDirection, int& x, in
 bool RayTracer::findIndecesByDimension( const MPoint& point, AxisDirection direction, int& x, int& y, int& z )
 {
 	int dimension = voxelParams.voxelsPerDimension;
-	while(true)
+	int cur3DIndex = voxelParams.flatten3dCubeIndex(x,y,z);
+	for(;x >= 0 && x < dimension && y >= 0 && y < dimension && z >= 0 && z < dimension; voxelParams.incrementIndeces(direction, x, y, z, cur3DIndex))
 	{
-		if(!(x >= 0 && x < dimension && y >= 0 && y < dimension && z >= 0 && z < dimension))
-		{
-			break;
-		}
-		if(pointInVoxelByDirection(point, voxelsData[flatten3dCubeIndex(dimension,x,y,z)], direction))
+		if(pointInVoxelByDirection(point, voxelsData[cur3DIndex], direction))
 		{
 			return true;
 		}
-		incrementIndeces(direction, x, y, z);
 	}
 	return false;
 }
@@ -719,7 +754,7 @@ void RayTracer::orthonormalDirections( AxisDirection direction, AxisDirection& u
 	}
 }
 
-inline bool RayTracer::pointInVoxelByDirection( const MPoint& closestIntersection,VoxelDataT voxel, AxisDirection direction )
+inline bool RayTracer::pointInVoxelByDirection( const MPoint& closestIntersection, VoxelDataT& voxel, AxisDirection direction )
 {
 	switch (direction)
 	{
@@ -735,32 +770,39 @@ inline bool RayTracer::pointInVoxelByDirection( const MPoint& closestIntersectio
 
 }
 
-void RayTracer::incrementIndeces( AxisDirection uDirection, int& x, int& y, int& z )
-{
-	switch (uDirection)
-	{
-	case X_POS:
-		++x;
-		break;
-	case X_NEG:
-		--x;
-		break;
-	case Y_POS:
-		++y;
-		break;
-	case Y_NEG:
-		--y;
-		break;
-	case Z_POS:
-		++z;
-		break;
-	case Z_NEG:
-		--z;
-		break;
-	default:
-		break;
-	}
-}
+//void RayTracer::incrementIndeces( AxisDirection uDirection, int& x, int& y, int& z, int& cur3dIndex )
+//{
+//	switch (uDirection)
+//	{
+//	case X_POS:
+//		++x;
+//		++cur3dIndex;
+//		break;
+//	case X_NEG:
+//		--x;
+//		++cur3dIndex;
+//		break;
+//	case Y_POS:
+//		++y;
+//		cur3dIndex += voxelParams.voxelsPerDimension;
+//		break;
+//	case Y_NEG:
+//		--y;
+//		cur3dIndex -= voxelParams.voxelsPerDimension;
+//		break;
+//	case Z_POS:
+//		++z;
+//		cur3dIndex += voxelParams.voxelsPerDimensionSqr;
+//		break;
+//	case Z_NEG:
+//		--z;
+//		cur3dIndex -= voxelParams.voxelsPerDimensionSqr;
+//		break;
+//	default:
+//		break;
+//	}
+//}
+
 
 // The function finds the mesh with it intersects given ray, the inner id of the face in the mesh and the intersection point.
 // Also it changes the x,y,z indices to match the voxel where the closest intersection happens.
@@ -771,11 +813,11 @@ bool RayTracer::closestIntersection(const int dimension,const MPoint& raySource,
 	Profiler::startTimer("SELF::closestIntersection");
 	MPoint nearInt, farInt;
 	AxisDirection nearAxisDir, farAxisDir;
-	VoxelDataT voxelData;
 	int currMeshIndex, currInnerFaceId;
 	MPoint currIntersection;
-	for(;x >= 0 && x < dimension && y >= 0 && y < dimension && z >= 0 && z < dimension; incrementIndeces(farAxisDir, x, y, z)) {
-		voxelData = voxelsData[flatten3dCubeIndex(dimension, x, y, z)];
+	int cur3Dindex = voxelParams.flatten3dCubeIndex( x, y, z);
+	for(;x >= 0 && x < dimension && y >= 0 && y < dimension && z >= 0 && z < dimension; voxelParams.incrementIndeces(farAxisDir, x, y, z, cur3Dindex)) {
+		VoxelDataT& voxelData = voxelsData[cur3Dindex];
 		if(!voxelData.v->intersectionsWithRay(raySource, rayDirection, nearInt, nearAxisDir, farInt, farAxisDir)) {
 			break;
 		}
@@ -794,10 +836,6 @@ bool RayTracer::closestIntersection(const int dimension,const MPoint& raySource,
 	}
 	Profiler::finishTimer("SELF::closestIntersection");
 	return false;
-
-	/*pixels[h*imgWidth*4 + w*4] = 0;
-	pixels[h*imgWidth*4 + w*4 + 1] = 125;
-	pixels[h*imgWidth*4 + w*4 + 2] = 0;*/
 }
 
 bool RayTracer::closestIntersectionInVoxel( MPoint raySource, MVector rayDirection, VoxelDataT &voxelData, int &meshIndex, int &innerFaceId, MPoint &intersection )
@@ -810,6 +848,7 @@ bool RayTracer::closestIntersectionInVoxel( MPoint raySource, MVector rayDirecti
 	MIntArray vertexIds;
 	int currentMeshIndex, currentFaceIndex;
 	MPoint curIntersection;
+
 	for(map<int, vector<int>>::iterator it = voxelData.meshIdToFaceIds.begin(); it != voxelData.meshIdToFaceIds.end(); ++it )
 	{
 		currentMeshIndex = it->first;

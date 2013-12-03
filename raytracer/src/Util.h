@@ -45,12 +45,12 @@ namespace util
 
 	bool							valueInInterval(double value, double intervalMin, double intervalMax);
 	bool							intervalsOverlap(double x1, double y1, double x2, double y2);
-	int								flatten3dCubeIndex(int dimSize, int x, int y, int z);
-	bool							pointInRectangle(AxisDirection projectionDirection, const MPoint point, const MPoint minPoint, const MPoint maxPoint );
+	//int								flatten3dCubeIndex(int dimSize, int x, int y, int z);
+	bool							pointInRectangle(AxisDirection projectionDirection, const MPoint& point, const MPoint& minPoint, const MPoint& maxPoint );
 	bool							isPointInVolume(const MPoint& point, const MPoint& minVolume, const MPoint& maxVolume);
-	bool							triangleBoxOverlap( const MPoint center , const double boxhalfsize[3], const MPointArray triangleVertices);
-	bool							rayIntersectsTriangle(const MPoint raySrc,const MVector rayDirection, const MPoint triangleVertices[3], double& time, MPoint& intersection);
-	MVector							reflectedRay(MVector ligthDir, MVector normal);
+	bool							triangleBoxOverlap( const MPoint& center , const double boxhalfsize[3], const MPointArray& triangleVertices);
+	bool							rayIntersectsTriangle(const MPoint& raySrc,const MVector& rayDirection, const MPoint triangleVertices[3], double& time, MPoint& intersection);
+	MVector							reflectedRay(const MVector& ligthDir,const MVector& normal);
 	void							caclulateBaricentricCoordinates( MPoint triangleVertices[3], MPoint point, double baricentricCoords[3] );
 
 	bool							getLambertShaderTexture(MFnLambertShader& lambert, MImage& img);

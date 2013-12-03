@@ -133,6 +133,7 @@ class RayTracer : public MPxCommand
 	struct MeshDataT
 	{
 		MDagPath	dagPath;
+
 		MPoint		max;		// WS axis aligned bounding box min
 		MPoint		min;		// WS axis aligned bounding box max
 
@@ -147,7 +148,7 @@ class RayTracer : public MPxCommand
 
 	vector<MeshDataT> meshesData;
 
-	struct VoxelezationParamT
+	struct SceneParamT
 	{
 		//double		dx;
 		//double		dy;
@@ -157,12 +158,52 @@ class RayTracer : public MPxCommand
 		double dimensionDeltas[3];
 
 		int			voxelsPerDimension;
+		int			voxelsPerDimensionSqr;
 
-		VoxelezationParamT() : voxelsPerDimension(1)
+		SceneParamT() : voxelsPerDimension(1), voxelsPerDimensionSqr(1)
 		{
 			dimensionDeltaHalfs[0] = dimensionDeltaHalfs[1] = dimensionDeltaHalfs[2] = 0.5;
 			dimensionDeltas[0] = dimensionDeltas[1] = dimensionDeltas[2] = 1;
 		}
+
+		inline int	flatten3dCubeIndex( int x, int y, int z)
+		{
+			return x + voxelsPerDimension*y + voxelsPerDimensionSqr*z;
+		}
+
+		inline void incrementIndeces( AxisDirection uDirection, int& x, int& y, int& z, int& cur3dIndex )
+		{
+			switch (uDirection)
+			{
+			case X_POS:
+				++x;
+				++cur3dIndex;
+				break;
+			case X_NEG:
+				--x;
+				--cur3dIndex;
+				break;
+			case Y_POS:
+				++y;
+				cur3dIndex += voxelsPerDimension;
+				break;
+			case Y_NEG:
+				--y;
+				cur3dIndex -= voxelsPerDimension;
+				break;
+			case Z_POS:
+				++z;
+				cur3dIndex += voxelsPerDimensionSqr;
+				break;
+			case Z_NEG:
+				--z;
+				cur3dIndex -= voxelsPerDimensionSqr;
+				break;
+			default:
+				break;
+			}
+		}
+
 
 	} voxelParams;
 
@@ -187,6 +228,9 @@ public:
 
 	void triangulateMesh(const MFnMesh& mesh);
 	void storeActiveCameraData();
+
+	void StoreCameraData( MFnCamera &camera );
+
 	void computeAndStoreImagePlaneData();
 	void storeLightingData();
 	void storeAmbientLight(MDagPath lightDagPath);
@@ -215,9 +259,9 @@ public:
 
 	void orthonormalDirections( AxisDirection direction, AxisDirection& uDirection, AxisDirection& vDirection );
 
-	bool pointInVoxelByDirection( const MPoint& closestIntersection,VoxelDataT voxel, AxisDirection uDirection );
+	bool pointInVoxelByDirection( const MPoint& closestIntersection,VoxelDataT& voxel, AxisDirection uDirection );
 
-	void incrementIndeces( AxisDirection uDirection, int& x, int& y, int& z );
+	//void incrementIndeces( AxisDirection uDirection, int& x, int& y, int& z, int& cur3dIndex );
 	
 	MColor calculatePixelColor(const int x, const int y, const int z,const MVector& rayDirection, const int meshIndex,const int innerFaceId,const MPoint& intersection );
 

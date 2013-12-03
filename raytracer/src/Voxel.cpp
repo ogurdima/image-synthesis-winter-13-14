@@ -5,6 +5,15 @@ Voxel::Voxel(MPoint _min, MPoint _max)
 	min = _min;
 	max = _max;
 	center = (min + max) / 2;
+	planes.resize(6);
+
+	planes[X_NEG] = Plane(min, MVector(-1,0,0));
+	planes[X_POS] = Plane(max, MVector(1,0,0));
+	planes[Y_NEG] = Plane(min, MVector(0, -1 ,0));
+	planes[Y_POS] = Plane(max, MVector(0,1,0));
+	planes[Z_NEG] = Plane(min, MVector(0,0, -1));
+	planes[Z_POS] = Plane(max, MVector(0,0,1));
+
 }
 
 
@@ -47,16 +56,7 @@ Voxel::~Voxel(void)
 bool Voxel::intersectionsWithRay( const MPoint& src, const MVector& dirVec, MPoint & nearInt, AxisDirection& nearDir, MPoint farInt, AxisDirection& farDir )
 {
 	//Profiler::startTimer("SELF::intersectionsWithRay");
-	vector<Plane> planes;
-	planes.resize(6);
-
-	planes[X_NEG] = Plane(min, MVector(-1,0,0));
-	planes[X_POS] = Plane(max, MVector(1,0,0));
-	planes[Y_NEG] = Plane(min, MVector(0, -1 ,0));
-	planes[Y_POS] = Plane(max, MVector(0,1,0));
-	planes[Z_NEG] = Plane(min, MVector(0,0, -1));
-	planes[Z_POS] = Plane(max, MVector(0,0,1));
-
+	
 	double times[2];
 	AxisDirection dirs[2];
 	MPoint ints[2];
