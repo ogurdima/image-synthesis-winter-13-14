@@ -48,10 +48,16 @@ namespace util
 	bool							isPointInVolume(const MPoint& point, const MPoint& minVolume, const MPoint& maxVolume);
 	bool							triangleBoxOverlap( const MPoint& center , const double boxhalfsize[3], const MPointArray& triangleVertices);
 	bool							rayIntersectsTriangle(const MPoint& raySrc,const MVector& rayDirection, const MPoint triangleVertices[3], double& time, MPoint& intersection);
+	bool							rayIntersectsTriangle(const MPoint& raySrc,const MVector& rayDirection, const MPointArray& triangleVertices, double& time, MPoint& intersection);
+	
 	MVector							reflectedRay(const MVector& ligthDir,const MVector& normal);
 	MVector							halfVector(const MVector& lightDir, const MVector& viewdDir );
+	
 	void							caclulateBaricentricCoordinates( MPoint triangleVertices[3], const MPoint& point, double baricentricCoords[3] );
+	void							caclulateBaricentricCoordinates(const MPointArray& triangleVertices, const MPoint& point, double baricentricCoords[3]);
 
+
+	
 	bool							getLambertShaderTexture(MFnLambertShader& lambert, MImage& img);
 
 	MColor							sumColors(const MColor& c1 , const MColor& c2);

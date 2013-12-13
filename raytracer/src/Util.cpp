@@ -298,8 +298,66 @@ namespace util
 		}
 	}
 
+	bool rayIntersectsTriangle(const MPoint& raySrc,const MVector& rayDirection, const MPointArray& triangleVertices, double& time, MPoint& intersection) 
+	{
+		double a,f,u,v;
+		MVector edge01(triangleVertices[1] - triangleVertices[0]);
+		MVector edge02(triangleVertices[2] - triangleVertices[0]);
+		MVector h = rayDirection ^ edge02;
+		a = edge01 * h;
+		if (abs(a) < DOUBLE_NUMERICAL_THRESHHOLD) {
+			return(false);
+		}
+		f = 1/a;
+		MVector s = raySrc - triangleVertices[0];
+		u = f * (s * h);
+
+		if (u < 0.0 || u > 1.0) {
+			return(false);
+		}
+		MVector q = s ^ edge01;
+		v = f * (rayDirection * q);
+		if (v < 0.0 || u + v > 1.0) {
+			return(false);
+		}
+		// at this stage we can compute t to find out where
+		// the intersection point is on the line
+		//double t = f * innerProduct(e2,q);
+		double localTime = f * (edge02 * q);
+		if (localTime > DOUBLE_NUMERICAL_THRESHHOLD) // ray intersection
+		{
+			time = localTime;
+			intersection = raySrc + time * rayDirection;
+			return true;
+		}
+		else {
+			// this means that there is a line intersection
+			// but not a ray intersection
+			return false;
+		}
+	}
+
+
+
 	void caclulateBaricentricCoordinates( MPoint triangleVertices[3], const MPoint& point, double baricentricCoords[3] )
 	{
+		MVector e01 = (triangleVertices[1] - triangleVertices[0]);
+		MVector e02 = (triangleVertices[2] - triangleVertices[0]);
+
+		double triArea = ( e01 ^ e02).length() * 0.5; 
+
+		MVector pv0 = triangleVertices[0] - point;
+		MVector pv1 = triangleVertices[1] - point;
+		MVector pv2 = triangleVertices[2] - point;
+
+		baricentricCoords[0] = ((pv2 ^ pv1).length() * 0.5 ) / triArea;
+		baricentricCoords[1] = ((pv0 ^ pv2).length() * 0.5 ) / triArea;
+		baricentricCoords[2] = ((pv1 ^ pv0).length() * 0.5 ) / triArea;
+	}
+
+	void caclulateBaricentricCoordinates(const MPointArray& triangleVertices, const MPoint& point, double baricentricCoords[3] )
+	{
+		
 		MVector e01 = (triangleVertices[1] - triangleVertices[0]);
 		MVector e02 = (triangleVertices[2] - triangleVertices[0]);
 
