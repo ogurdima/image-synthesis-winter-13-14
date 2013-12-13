@@ -36,7 +36,6 @@ bool Voxel::intersectsWith(const MDagPath& meshPath, const double halfsSides[3],
 
 	MPointArray ptsArray;
 	MIntArray vertexList;
-	MPoint pts[3];
 	for (;!faceIt.isDone();faceIt.next())
 	{
 		faceIt.getTriangles(ptsArray,vertexList,MSpace::kWorld);

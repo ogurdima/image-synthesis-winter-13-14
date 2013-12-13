@@ -2,6 +2,11 @@
 
 #include "Profiler.h"
 
+
+#ifdef _DEBUG
+#define DEBUG_REPORT 0
+#endif
+
 #ifdef PRINT_FOR_DEBUG
 #define PRINT_IN_MAYA(arg) MGlobal::displayInfo((arg));
 #endif
@@ -17,6 +22,8 @@ long	RayTracer::intersectionFoundCount = 0;
 long	RayTracer::voxelsTraversed = 0;
 long	RayTracer::totalRayCount = 0;
 long	RayTracer::totalPolyCount = 0;
+
+
 char*	RayTracer::outputFilePath = "C://temp//scene.iff";
 char*	RayTracer::statisticsFilePath = "C://temp//stat.txt";
 
@@ -155,16 +162,6 @@ void* RayTracer::creator()
 	return new RayTracer;
 }
 
-bool badMStatus(const MStatus& status, const MString& error)
-{
-	if(status != MStatus::kSuccess)
-	{
-		status.perror(error);
-		return true;
-	}
-	return false;
-}
-
 inline void RayTracer::triangulateMesh(const MFnMesh& mesh)
 {
 	MString cmd("polyTriangulate -ch 0 ");
@@ -182,42 +179,45 @@ void RayTracer::openImageInMaya()
 
 void RayTracer::printStatisticsReport()
 {
+	ostringstream os;
+
+	os << "prepTime " << prepTime << endl;
+	os << "renderTime " << (totalTime - prepTime) << endl;
+	os << "totalTime " << totalTime << endl;
+	os << "timePerPixel " << timePerPixel << endl;
+	os << "timePerPixelDeviation " << timePerPixelStandardDeviation << endl;
+	os << "polygons " << totalPolyCount << endl;
+	os << "polygonsPerRay " << ((double)intersectionTestCount / (double)totalRayCount) << endl;
+	os << "voxelsPerRay " << (voxelsTraversed / (double)totalRayCount) << endl;
+	os << "intersectionTests " << intersectionTestCount << endl;
+	os << "Intersections " << ((double)intersectionFoundCount/intersectionTestCount) * 100 << "%" << endl;
+
 	std::ofstream outfile;
 	outfile.open(statisticsFilePath);
+	outfile << os.str().c_str();
 
-	outfile << "prepTime " << prepTime << endl;
-	outfile << "renderTime " << (totalTime - prepTime) << endl;
-	outfile << "totalTime " << totalTime << endl;
-	outfile << "timePerPixel " << timePerPixel << endl;
-	outfile << "timePerPixelDeviation " << timePerPixelStandardDeviation << endl;
-	outfile << "polygons " << totalPolyCount << endl;
-	outfile << "polygonsPerRay " << ((double)intersectionTestCount / (double)totalRayCount) << endl;
-	outfile << "voxelsPerRay " << (voxelsTraversed / (double)totalRayCount) << endl;
-	outfile << "intersectionTests " << intersectionTestCount << endl;
-	outfile << "Intersections " << ((double)intersectionFoundCount/intersectionTestCount) * 100 << "%" << endl;
+#ifdef DEBUG_REPORT
+	std::cout << os.str().c_str();
+#endif
 
 	outfile.close();
 }
 
 void RayTracer::storeCameraData( MFnCamera &camera )
 {
-	MVector up = camera.upDirection(MSpace::kWorld);
-	up.normalize();
-	MVector view = camera.viewDirection(MSpace::kWorld);
-	view.normalize();
-	MVector eye = camera.eyePoint(MSpace::kWorld);
-	double focalMm = camera.focalLength();
+	activeCameraData.upDir			= camera.upDirection(MSpace::kWorld).normal();
+	activeCameraData.viewDir		= camera.viewDirection(MSpace::kWorld).normal();
+	activeCameraData.eye			= camera.eyePoint(MSpace::kWorld);
+	activeCameraData.focalLengthCm	= (camera.focalLength() / 10);
 
-
-	activeCameraData.eye = eye;
-	activeCameraData.filmWidthCm = 2.54 * camera.horizontalFilmAperture();
-	activeCameraData.focalLengthCm = (focalMm / 10);
-	activeCameraData.upDir = up;
-	activeCameraData.viewDir = view;
-	activeCameraData.isPerspective = !camera.isOrtho();
-	if (!activeCameraData.isPerspective ) {
-		activeCameraData.filmWidthCm = camera.orthoWidth();
-	}	
+	if (camera.isOrtho() ) {
+		activeCameraData.isPerspective	= false;
+		activeCameraData.filmWidthCm	= camera.orthoWidth();
+	}
+	else {
+		activeCameraData.isPerspective	= true;
+		activeCameraData.filmWidthCm	= 2.54 * camera.horizontalFilmAperture();
+	}
 }
 
 void RayTracer::storeActiveCameraData()
@@ -309,7 +309,6 @@ void RayTracer::storeLightingData()
 		else
 		{
 #ifdef PRINT_FOR_DEBUG
-
 			PRINT_IN_MAYA("Unsupported light");
 #endif
 		}
@@ -340,20 +339,10 @@ void RayTracer::storeDirectionalLight(MDagPath lightDagPath)
 {
 	MStatus status;
 	MFnLight l(lightDagPath);
-	MFloatVector dirFloat = l.lightDirection(lightDagPath.instanceNumber(), MSpace::kWorld, &status);
-	CHECK_MSTATUS(status);
-
-	MVector vecc(0,0,1);
 
 	MVector lightDir(0,0,-1); // origin
 	lightDir *= lightDagPath.inclusiveMatrix();
 	lightDir.normalize();
-	MVector dir;
-	dir.x = (double) dirFloat.x;
-	dir.y = (double) dirFloat.y;
-	dir.z = (double) dirFloat.z;
-	dir.normalize();
-	//PRINT_IN_MAYA(MString("Directional Light in WF:") + vectorToString(dir));
 
 	LightDataT ld;
 	ld.type = LightDataT::DIRECTIONAL;
@@ -367,19 +356,12 @@ void RayTracer::storePointLight(MDagPath lightDagPath)
 {
 	MStatus status;
 	MFnLight l(lightDagPath);
-	MMatrix transform = lightDagPath.inclusiveMatrix(); /*getDagPathTransformationMatrix(lightDagPath, &status);*/
-	CHECK_MSTATUS(status);
-	MPoint pointLightOrigin = MPoint(0,0,0,1);
-	MPoint positionWorldFrame = pointLightOrigin * transform;
-
-
-	//PRINT_IN_MAYA(MString("Point Light in WF:") + pointToString(positionWorldFrame));
 
 	LightDataT ld;
 	ld.type = LightDataT::POINT;
 	ld.color = l.color();
 	ld.intencity = l.intensity();
-	ld.position = positionWorldFrame;
+	ld.position = MPoint(0,0,0,1) * lightDagPath.inclusiveMatrix();
 	lightingData.push_back(ld);
 }
 
@@ -436,7 +418,6 @@ void RayTracer::storeMeshTexturingData(MeshDataT& m)
 					m.useHalfVector = true;
 					m.eccentricity = blinn.eccentricity();
 				}
-
 			}
 			else{
 				//default material
@@ -455,9 +436,10 @@ void RayTracer::computeAndStoreMeshData()
 {
 	MStatus status;
 	MItDag dagIterator(MItDag::kDepthFirst, MFn::kMesh , &status);
-	CHECK_MSTATUS(status);
+
 	for(; !dagIterator.isDone(); dagIterator.next())
 	{
+		
 		MDagPath dagPath;
 		status = dagIterator.getPath(dagPath);
 		CHECK_MSTATUS(status);
@@ -465,20 +447,35 @@ void RayTracer::computeAndStoreMeshData()
 		triangulateMesh(MFnMesh(dagPath));
 		pair<MPoint,MPoint> boundingBox = computeWfAxisAlignedBoundingBox(dagPath);
 		MeshDataT aMesh;
+
 		aMesh.dagPath = dagPath;
 		aMesh.min = boundingBox.first;
 		aMesh.max = boundingBox.second;
-		storeMeshTexturingData(aMesh); 
+		storeMeshTexturingData(aMesh);
+
+		MItMeshPolygon faceIt(dagPath);
+		for(; !faceIt.isDone(); faceIt.next())
+		{
+			Face f;
+			faceIt.getPoints(f.vertices, MSpace::kWorld);
+			faceIt.getNormals(f.normals, MSpace::kWorld);
+			if(aMesh.hasTexture)
+			{
+				faceIt.getUVs(f.us, f.vs);
+			}
+			aMesh.faces.push_back(f);
+		}
+
 		meshesData.push_back(aMesh);
 
 		MFnMesh meshFn(dagPath);
 
 		totalPolyCount += meshFn.numPolygons();
+
 #ifdef PRINT_FOR_DEBUG
 		PRINT_IN_MAYA(MString("Storing mesh, bb is:") + pointToString(aMesh.min) + "," + pointToString(aMesh.max));
 #endif
 	}
-
 
 	MSelectionList selected;
 	MGlobal::getActiveSelectionList(selected);
@@ -512,7 +509,6 @@ void RayTracer::computeAndStoreSceneBoundingBox()
 	sceneBBPlanes[Z_POS] = Plane(maxScene, MVector(0,0,1));
 
 #ifdef PRINT_FOR_DEBUG
-
 	PRINT_IN_MAYA(MString("Scene, bb is:") + pointToString(minScene) + "," + pointToString(maxScene));
 #endif
 }
@@ -521,7 +517,7 @@ void RayTracer::voxelizeScene()
 {
 	computeAndStoreVoxelParams();
 	computeAndStoreRawVoxelsData();
-	computeVoxelMeshBboxIntersections();
+	computeVoxelMeshIntersections();
 }
 
 void RayTracer::computeAndStoreVoxelParams()
@@ -591,7 +587,7 @@ void RayTracer::computeAndStoreRawVoxelsData()
 	}
 }
 
-void RayTracer::computeVoxelMeshBboxIntersections()
+void RayTracer::computeVoxelMeshIntersections()
 {
 	double dimensionDeltaHalfs[3];
 	for (int i = 0; i < 3; ++i)
@@ -635,7 +631,7 @@ void RayTracer::bresenhaim()
 {
 	unsigned char* pixels = new unsigned char[imgWidth*imgHeight*4];
 	memset(pixels,0,imgWidth*imgHeight*4);
-	MPoint lbPixelCenter = imagePlane.lb + (imagePlane.x + imagePlane.y) * (imagePlane.dp / 2);
+
 
 	double ssDp = imagePlane.dp / (double) (supersamplingCoeff + 1);
 	MVector ssdx = imagePlane.x * ssDp;
@@ -643,8 +639,6 @@ void RayTracer::bresenhaim()
 
 	MVector dx = imagePlane.x * imagePlane.dp;
 	MVector dy = imagePlane.y * imagePlane.dp;
-
-	int dimension = sceneParams.voxelsPerDimension;
 	
 
 	MPoint leftBottomOfPixel,bottomInPixel, leftBottomInPixel;
@@ -690,7 +684,7 @@ void RayTracer::bresenhaim()
 						continue;
 					}
 
-					bool foundIntersection = closestIntersection(dimension, raySource, rayDirection, x, y, z, meshIntersectionIndex, innerFaceIntersectionIndex, intersectionPoint );
+					bool foundIntersection = closestIntersection(raySource, rayDirection, x, y, z, meshIntersectionIndex, innerFaceIntersectionIndex, intersectionPoint );
 
 					if(!foundIntersection) {
 						// Put the background
@@ -861,7 +855,7 @@ inline bool RayTracer::pointInVoxelByDirection( const MPoint& closestIntersectio
 // Also it changes the x,y,z indices to match the voxel where the closest intersection happens.
 // Returns true if finds
 // Return false if it arrives to the scene bounds and doesn't meet any mesh an some point.
-bool RayTracer::closestIntersection(const int dimension,const MPoint& raySource,const MVector& rayDirection, int& x, int& y, int& z , int& meshIndex, int& innerFaceId, MPoint& intersection )
+bool RayTracer::closestIntersection(const MPoint& raySource,const MVector& rayDirection, int& x, int& y, int& z , int& meshIndex, int& innerFaceId, MPoint& intersection )
 {
 	totalRayCount++;
 
@@ -869,7 +863,10 @@ bool RayTracer::closestIntersection(const int dimension,const MPoint& raySource,
 	int currMeshIndex, currInnerFaceId;
 	MPoint currIntersection;
 	int cur3Dindex = sceneParams.flatten3dCubeIndex( x, y, z);
-	for(;x >= 0 && x < dimension && y >= 0 && y < dimension && z >= 0 && z < dimension; sceneParams.incrementIndeces(farAxisDir, x, y, z, cur3Dindex)) {
+	for(;x >= 0 && x < sceneParams.voxelsPerDimension &&
+		 y >= 0 && y < sceneParams.voxelsPerDimension && 
+		 z >= 0 && z < sceneParams.voxelsPerDimension; 
+				sceneParams.incrementIndeces(farAxisDir, x, y, z, cur3Dindex)) {
 		VoxelDataT& voxelData = voxelsData[cur3Dindex];
 		if(!voxelData.v->findExitDirection(raySource, rayDirection, farAxisDir)) {
 			break;
@@ -884,8 +881,6 @@ bool RayTracer::closestIntersection(const int dimension,const MPoint& raySource,
 		meshIndex = currMeshIndex;
 		innerFaceId = currInnerFaceId;
 		intersection = currIntersection;
-
-		
 		return true;
 	}
 
@@ -898,34 +893,33 @@ bool RayTracer::closestIntersectionInVoxel(const MPoint& raySource, const MVecto
 	bool res = false;
 	double minTime = DBL_MAX;
 	double time;
-	MPoint triangleVertices[3];
-	MIntArray vertexIds;
-	int currentMeshIndex, currentFaceIndex;
+	int currentFaceIndex;
 	MPoint curIntersection;
 
 	for(map<int, vector<int>>::iterator it = voxelData.meshIdToFaceIds.begin(); it != voxelData.meshIdToFaceIds.end(); ++it )
 	{
-		currentMeshIndex = it->first;
-		MFnMesh mesh(meshesData[it->first].dagPath);
+		MeshDataT& mesh = meshesData[it->first];
 		vector<int>& faceIds = it->second;
 		for(currentFaceIndex = (int) faceIds.size() - 1; currentFaceIndex >= 0; --currentFaceIndex)
 		{
 			intersectionTestCount++;
-
+			Face& face = mesh.faces[faceIds[currentFaceIndex]];
+/*
 			mesh.getPolygonVertices(faceIds[currentFaceIndex], vertexIds);
 			if(vertexIds.length() != 3) {
 				continue;
 			}
 			for (int vi = 0; vi < 3; ++vi) {
 				mesh.getPoint(vertexIds[vi], triangleVertices[vi], MSpace::kWorld);
-			}
-			if(!rayIntersectsTriangle(raySource, rayDirection, triangleVertices, time, curIntersection)
+			}*/
+
+			if(!rayIntersectsTriangle(raySource, rayDirection, face.vertices, time, curIntersection)
 				|| !isPointInVolume(curIntersection, voxelData.v->Min(), voxelData.v->Max()))
 			{
 				continue;
 			}
 			if(time < minTime) {
-				meshIndex = currentMeshIndex;
+				meshIndex = it->first;
 				innerFaceId = faceIds[currentFaceIndex];
 				intersection = curIntersection;
 				minTime = time;
@@ -940,14 +934,14 @@ bool RayTracer::closestIntersectionInVoxel(const MPoint& raySource, const MVecto
 
 MColor RayTracer::calculatePixelColor(const int x, const int y, const int z,const MVector& rayDirection, const int meshIndex,const int innerFaceId,const MPoint& intersection)
 {
-	
-	MFnMesh mesh(meshesData[meshIndex].dagPath);
-	MIntArray vertexIds;
+	MeshDataT& mesh = meshesData[meshIndex];
+	Face& face = meshesData[meshIndex].faces[innerFaceId];
+
+	/*MIntArray vertexIds;
 	MPoint triangleVertices[3];
 	MVector triangleNormals[3];
 	float us[3];
 	float vs[3];
-
 	mesh.getPolygonVertices(innerFaceId, vertexIds);
 	if(vertexIds.length() != 3) {
 		MColor material( 0.25,0.25,0.25 );
@@ -958,83 +952,74 @@ MColor RayTracer::calculatePixelColor(const int x, const int y, const int z,cons
 		mesh.getFaceVertexNormal(innerFaceId, vertexIds[vi], triangleNormals[vi], MSpace::kWorld );
 		triangleNormals[vi].normalize();
 		mesh.getPolygonUV(innerFaceId, vi, us[vi], vs[vi]);
-	}
+	}*/
 
 
-	double baricentricCoords[3];
+	double bc[3]; // baricentric coords
 
-	caclulateBaricentricCoordinates(triangleVertices, intersection, baricentricCoords );
+	caclulateBaricentricCoordinates(face.vertices, intersection, bc );
 
 
-	MColor	specularMaterialColor	=	meshesData[meshIndex].specular;
-	MColor	ambientMaterialColor	=	meshesData[meshIndex].ambient;
-	float	specularPower			=	meshesData[meshIndex].specularPower;
+	MColor	specularMaterialColor	=	mesh.specular;
+	MColor	ambientMaterialColor	=	mesh.ambient;
+	float	specularPower			=	mesh.specularPower;
 	MColor	diffuseMaterialColor;
-	bool useHalfVector = meshesData[meshIndex].useHalfVector;
-	float eccentricity = meshesData[meshIndex].eccentricity;
-	if (meshesData[meshIndex].hasTexture) 
-	{
+	bool useHalfVector = mesh.useHalfVector;
+	float eccentricity = mesh.eccentricity;
+	if (!mesh.hasTexture) {
+		diffuseMaterialColor = mesh.diffuse;
+	}
+	else {
 		// get texture color at point using u,v and bilinear filter
-		double u = 0, v = 0;
-		for (int z = 0; z < 3; ++z)
-		{
-			u += baricentricCoords[z] * us[z];
-			v += baricentricCoords[z] * vs[z];
-		}
-		diffuseMaterialColor = getBilinearFilteredPixelColor(meshesData[meshIndex].texture, u, v); 
+		double u = bc[0] * face.us[0] +  bc[1] * face.us[1] +  bc[2] * face.us[2];
+		double v = bc[0] * face.vs[0] +  bc[1] * face.vs[1] +  bc[2] * face.vs[2];
+		diffuseMaterialColor = getBilinearFilteredPixelColor(mesh.texture, u, v); 
 	}
-	else 
-	{
-		diffuseMaterialColor = meshesData[meshIndex].diffuse;
-	}
+	MVector normalAtPoint = (bc[0] * face.normals[0] +  bc[1] * face.normals[1] +  bc[2] * face.normals[2]).normal();
 
-
-	MVector normalAtPoint = (baricentricCoords[0] * triangleNormals[0] + baricentricCoords[1] * triangleNormals[1] + baricentricCoords[2] * triangleNormals[2]).normal();
 	MColor pixelColor = MColor(0,0,0,1);
 
-	LightDataT currLight;
 	int currX, currY, currZ;
 	MPoint secondIntersection;
 	int secondIntersectionMeshIndex, secondIntersectionFaceId;
 	for (int li = (int) lightingData.size()- 1; li >= 0; --li)
 	{
-		MColor currColorComponent(0,0,0,0);
-		
-		currLight = lightingData[li];
+		LightDataT & currLight = lightingData[li];
 		MColor mixedDiffuse = diffuseMaterialColor * currLight.color * currLight.intencity;
 		MColor mixedSpecular = specularMaterialColor * currLight.color * currLight.intencity;	
 		currX = x;
 		currY = y;
 		currZ = z;
-		if(currLight.type == LightDataT::AMBIENT)
-		{
-			MColor mixedAmbient = ambientMaterialColor * currLight.color * currLight.intencity;
-			pixelColor = sumColors(mixedAmbient, pixelColor);
-		} 
-		else if(currLight.type == LightDataT::DIRECTIONAL)
-		{
 
-			if(! closestIntersection(sceneParams.voxelsPerDimension, intersection, -currLight.direction, currX, currY, currZ, secondIntersectionMeshIndex, secondIntersectionFaceId, secondIntersection )){
+		switch (currLight.type)
+		{
+		case LightDataT::AMBIENT:
+			pixelColor = sumColors(ambientMaterialColor * currLight.color * currLight.intencity, pixelColor);
+			break;
+		case LightDataT::DIRECTIONAL:
+			if(! closestIntersection(intersection, -currLight.direction, currX, currY, currZ, secondIntersectionMeshIndex, secondIntersectionFaceId, secondIntersection )){
 				pixelColor = sumColors(calculateSpecularAndDiffuse(rayDirection, currLight.direction, normalAtPoint, mixedDiffuse, mixedSpecular, specularPower, useHalfVector, eccentricity), pixelColor);
 			}
+			break;
+		case LightDataT::POINT:
+			{
+				MVector lightDirection = intersection - currLight.position;
+				MVector lightDirectionNormalized = lightDirection.normal();
 
-		}
-		else if( currLight.type == LightDataT::POINT)
-		{
-			MVector lightDirection = intersection - currLight.position;
-			MVector lightDirectionNormalized = lightDirection.normal();
-
-			if(closestIntersection(sceneParams.voxelsPerDimension, intersection, -lightDirectionNormalized, currX, currY, currZ, secondIntersectionMeshIndex, secondIntersectionFaceId, secondIntersection )){
-				if((secondIntersection - intersection).length() >= lightDirection.length()) // intersection after the light
+				if(closestIntersection(intersection, -lightDirectionNormalized, currX, currY, currZ, secondIntersectionMeshIndex, secondIntersectionFaceId, secondIntersection )){
+					if((secondIntersection - intersection).length() >= lightDirection.length()) // intersection after the light
+					{
+						pixelColor = sumColors(calculateSpecularAndDiffuse(rayDirection, lightDirectionNormalized, normalAtPoint, mixedDiffuse, mixedSpecular, specularPower, useHalfVector, eccentricity), pixelColor) ;
+					}
+				}
+				else 
 				{
-					pixelColor = sumColors(calculateSpecularAndDiffuse(rayDirection, lightDirectionNormalized, normalAtPoint, mixedDiffuse, mixedSpecular, specularPower, useHalfVector, eccentricity), pixelColor) ;
+					pixelColor = sumColors(calculateSpecularAndDiffuse(rayDirection, lightDirectionNormalized, normalAtPoint, mixedDiffuse, mixedSpecular, specularPower, useHalfVector, eccentricity), pixelColor);
 				}
 			}
-			else 
-			{
-				pixelColor = sumColors(calculateSpecularAndDiffuse(rayDirection, lightDirectionNormalized, normalAtPoint, mixedDiffuse, mixedSpecular, specularPower, useHalfVector, eccentricity), pixelColor);
-			}
-
+			break;
+		default:
+			break;
 		}
 	}
 

@@ -1,30 +1,20 @@
 #pragma once
 
 #include <maya/MArgList.h>
-#include <maya/MObject.h>
 #include <maya/MGlobal.h>
 #include <maya/MPxCommand.h>
-#include <maya/MItDependencyNodes.h>
-#include <maya/MItGeometry.h>
 #include <maya/MFnMesh.h>
-#include <maya/MItMeshVertex.h>
 #include <maya/MMatrix.h>
-#include <maya/MFnTransform.h>
 #include <maya/MFnCamera.h>
 #include <maya/MPointArray.h>
 #include <maya/MItDag.h>
 #include <maya/MDagPath.h>
-#include <maya/MFloatMatrix.h>
 #include <maya/MSyntax.h>
 #include <maya/MFnLight.h>
 #include <maya/M3dView.h>
-#include <maya/MFloatPoint.h>
-#include <maya/MFloatVector.h>
 #include <maya/MImage.h>
-#include <maya/MBoundingBox.h>
 #include <maya/MSelectionList.h>
 #include <maya/MTimer.h>
-#include <maya/MArgDatabase.h>
 #include <maya/MArgParser.h>
 #include <maya/MPlug.h>
 #include <maya/MPlugArray.h>
@@ -93,6 +83,7 @@ class RayTracer : public MPxCommand
 		double		focalLengthCm;
 		double		filmWidthCm;
 		bool		isPerspective;
+
 		MString		toString() {
 			ostringstream os;
 			os << "Camera: Eye:" << pointToString(eye) << ",View:" << vectorToString(viewDir) << ",Up:" 
@@ -100,18 +91,19 @@ class RayTracer : public MPxCommand
 			return MString(os.str().c_str());
 		}
 
-	} activeCameraData;
+	};
 
 	struct ImagePlaneDataT
 	{
 		MVector		x;
 		MVector		y;
+
 		MPoint		lt; //left top
 		MPoint		rt; //right top
 		MPoint		lb; //left bottom
 		MPoint		rb; //right bottom
 		double		dp; //delta p - pixel size
-	} imagePlane;
+	};
 
 	struct LightDataT
 	{
@@ -140,7 +132,13 @@ class RayTracer : public MPxCommand
 		
 	};
 
-	vector<LightDataT> lightingData;
+	struct Face
+	{
+		MPointArray vertices;
+		MVectorArray normals;
+		MFloatArray us;
+		MFloatArray vs;
+	};
 
 	struct MeshDataT
 	{
@@ -159,9 +157,10 @@ class RayTracer : public MPxCommand
 		bool		useHalfVector;
 		float		eccentricity;
 		
-	};
 
-	vector<MeshDataT> meshesData;
+		vector<Face> faces;
+
+	};
 
 	struct SceneParamT
 	{
@@ -220,8 +219,7 @@ class RayTracer : public MPxCommand
 			voxelsTraversed++;
 		}
 
-
-	} sceneParams;
+	} ;
 
 	struct VoxelDataT
 	{
@@ -231,39 +229,61 @@ class RayTracer : public MPxCommand
 		
 	};
 
+	CameraDataT activeCameraData;
+	ImagePlaneDataT imagePlane;
+	SceneParamT sceneParams;
+	vector<MeshDataT> meshesData;
 	vector<VoxelDataT> voxelsData;
-
+	vector<LightDataT> lightingData;
 public:
 
+#pragma region INTERACTION
 	RayTracer();
 	~RayTracer();
 	virtual MStatus doIt(const MArgList& argList);
 	static void* creator();
 	static MSyntax newSyntax();
 	bool parseArgs( const MArgList& args);
+	void openImageInMaya();
+	void printStatisticsReport();
+#pragma endregion
 
+#pragma region MESH
 	void triangulateMesh(const MFnMesh& mesh);
-	void storeActiveCameraData();
-	void storeCameraData( MFnCamera &camera );
-	void computeAndStoreImagePlaneData();
+	void computeAndStoreMeshData();
+	void computeVoxelMeshIntersections();
+	void storeMeshTexturingData(MeshDataT& m);
+#pragma endregion 
+
+#pragma region LIGHTS
 	void storeLightingData();
 	void storeAmbientLight(MDagPath lightDagPath);
 	void storeDirectionalLight(MDagPath lightDagPath);
 	void storePointLight(MDagPath lightDagPath);
-	void computeAndStoreMeshData();
+#pragma endregion 
+
+#pragma region CAMERA_AND_IMG_PLANE
+	void storeActiveCameraData();
+	void storeCameraData( MFnCamera &camera );
+	void computeAndStoreImagePlaneData();
+#pragma endregion 
+
+#pragma region SCENE
 	void computeAndStoreSceneBoundingBox();
 	void voxelizeScene();
 	void computeAndStoreVoxelParams();
 	void computeAndStoreRawVoxelsData();
-	void computeVoxelMeshBboxIntersections();
+#pragma endregion 
+
+#pragma region ALGO
+
+#pragma endregion 
+
 	void bresenhaim();
-	void openImageInMaya();
-	void printStatisticsReport();
+	
 
-	void storeMeshTexturingData(MeshDataT& m);
 
-	bool closestIntersection(const int dimension,const MPoint& raySource,const MVector& rayDirection,int& x,int& y,int& z , int& meshIndex, int& innerFaceId, MPoint& intersection  );
-
+	bool closestIntersection(const MPoint& raySource,const MVector& rayDirection,int& x,int& y,int& z , int& meshIndex, int& innerFaceId, MPoint& intersection  );
 	bool closestIntersectionInVoxel(const MPoint& raySource, const MVector& rayDirection, VoxelDataT &voxelData, int &meshIndex, int &innerFaceId, MPoint &intersection);
 
 	bool findStartingVoxelIndeces(const MPoint& raySrc, const MVector& rayDirection, int& bx, int& by, int& bz);
