@@ -17,7 +17,7 @@ Voxel::Voxel(MPoint _min, MPoint _max)
 }
 
 
-bool Voxel::intersectsWith(MPoint otherMin, MPoint otherMax)
+bool Voxel::intersectsWith(const MPoint& otherMin, const MPoint& otherMax)
 {
 	if (	intervalsOverlap(min.x, max.x, otherMin.x, otherMax.x) && 
 			intervalsOverlap(min.y, max.y, otherMin.y, otherMax.y) && 
@@ -29,19 +29,14 @@ bool Voxel::intersectsWith(MPoint otherMin, MPoint otherMax)
 }
 
 
-bool Voxel::intersectsWith(const MDagPath& meshPath, const double halfsSides[3], vector<int>& faceIds) const
+bool Voxel::intersectsWith(const MeshDataT& mesh, const double halfsSides[3], vector<int>& faceIds) const
 {
-	
-	MItMeshPolygon faceIt(meshPath);
-
-	MPointArray ptsArray;
-	MIntArray vertexList;
-	for (;!faceIt.isDone();faceIt.next())
+	int size = mesh.faces.size();
+	for (int i = 0; i < size; ++i)
 	{
-		faceIt.getTriangles(ptsArray,vertexList,MSpace::kWorld);
-		if(triangleBoxOverlap(center, halfsSides, ptsArray))
+		if(triangleBoxOverlap(center, halfsSides, mesh.faces[i].vertices))
 		{
-			faceIds.push_back(faceIt.index());
+			faceIds.push_back(i);
 		}
 	}
 	
@@ -54,8 +49,6 @@ Voxel::~Voxel(void)
 
 bool Voxel::findExitDirection( const MPoint& src, const MVector& dirVec, AxisDirection& farDir )
 {
-
-	
 	double times[2];
 	AxisDirection dirs[2];
 	MPoint intersection;

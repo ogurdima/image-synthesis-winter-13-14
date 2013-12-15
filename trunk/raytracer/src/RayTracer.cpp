@@ -11,6 +11,9 @@
 #define PRINT_IN_MAYA(arg) MGlobal::displayInfo((arg));
 #endif
 
+
+
+#pragma region STATIC VARS
 const MString CAMERA_NAME = "cameraShape1";
 
 double	RayTracer::prepTime = 0;
@@ -26,6 +29,8 @@ long	RayTracer::totalPolyCount = 0;
 
 char*	RayTracer::outputFilePath = "C://temp//scene.iff";
 char*	RayTracer::statisticsFilePath = "C://temp//stat.txt";
+
+#pragma endregion
 
 
 MStatus RayTracer::doIt(const MArgList& argList)
@@ -67,6 +72,7 @@ MSyntax RayTracer::newSyntax()
 	syntax.addFlag(heightFlag, "-height", MSyntax::kLong);
 	syntax.addFlag(voxelsFlag, "-voxels", MSyntax::kLong);
 	syntax.addFlag(supersamplingFlag, "-supersampling", MSyntax::kLong);
+	syntax.addFlag(superSamplingTypeFlag, "-supersamplingtype", MSyntax::kString);
 
 	return syntax;
 }
@@ -81,7 +87,7 @@ bool RayTracer::parseArgs( const MArgList& args)
 		uint arg;
 		s = argData.getFlagArgument(widthFlag, 0, arg);	
 		if (s == MStatus::kSuccess) {
-			imgWidth = (arg < 1) ? 1 : arg;
+			imagePlane.imgWidth = (arg < 1) ? 1 : arg;
 		}
 	}
 
@@ -89,7 +95,7 @@ bool RayTracer::parseArgs( const MArgList& args)
 		uint arg;
 		s = argData.getFlagArgument(heightFlag, 0, arg);	
 		if (s == MStatus::kSuccess) {
-			imgHeight = (arg < 1) ? 1 : arg;
+			imagePlane.imgHeight = (arg < 1) ? 1 : arg;
 		}
 	}
 
@@ -107,22 +113,42 @@ bool RayTracer::parseArgs( const MArgList& args)
 		s = argData.getFlagArgument(supersamplingFlag, 0, arg);	
 		if (s == MStatus::kSuccess) {
 			// do stuff
-			supersamplingCoeff = (arg < 1) ? 1 : arg;
+			imagePlane.supersamplingCoeff = (arg < 1) ? 1 : arg;
 		}
 	}
 
+	imagePlane.ssType = RayTracer::ImagePlaneDataT::UNDEFINED;
+	if ( argData.isFlagSet(superSamplingTypeFlag) ) {
+		MString arg;
+		s = argData.getFlagArgument(superSamplingTypeFlag, 0, arg);	
+		if (s == MStatus::kSuccess) {
+			// do stuff
+			if(arg == "uniform")
+				imagePlane.ssType = RayTracer::ImagePlaneDataT::UNIFORM;
+			else if(arg == "jittered")
+				imagePlane.ssType = RayTracer::ImagePlaneDataT::JITTERED;
+			else if(arg == "random")
+				imagePlane.ssType = RayTracer::ImagePlaneDataT::RANDOM;
+			else if(arg == "adaptive")
+				imagePlane.ssType = RayTracer::ImagePlaneDataT::ADAPTIVE;
+		}
+	}
+	if(imagePlane.ssType == RayTracer::ImagePlaneDataT::UNDEFINED)
+		imagePlane.ssType = RayTracer::ImagePlaneDataT::UNIFORM;
+
+	
 	return true;
 }
 
 RayTracer::RayTracer()
 {
-	imgWidth = 1920;
-	imgHeight = 1080;
+	imagePlane.imgWidth = 1920;
+	imagePlane.imgHeight = 1080;
 	sceneParams.voxelsPerDimension = 1;
-	supersamplingCoeff = 1;
+	imagePlane.supersamplingCoeff = 1;
 	sceneParams.voxelsPerDimensionSqr = 1;
-	
-	
+
+
 	prepTime = 0;
 	totalTime = 0;
 	timePerPixel = 0;
@@ -135,7 +161,7 @@ RayTracer::RayTracer()
 
 	minScene = MPoint( DBL_MAX ,DBL_MAX,DBL_MAX);
 	maxScene = MPoint(-DBL_MAX, -DBL_MAX, -DBL_MAX);
-	
+
 	meshesData.clear();
 	lightingData.clear();
 
@@ -208,15 +234,17 @@ void RayTracer::storeCameraData( MFnCamera &camera )
 	activeCameraData.upDir			= camera.upDirection(MSpace::kWorld).normal();
 	activeCameraData.viewDir		= camera.viewDirection(MSpace::kWorld).normal();
 	activeCameraData.eye			= camera.eyePoint(MSpace::kWorld);
-	activeCameraData.focalLengthCm	= (camera.focalLength() / 10);
+	
 
 	if (camera.isOrtho() ) {
 		activeCameraData.isPerspective	= false;
 		activeCameraData.filmWidthCm	= camera.orthoWidth();
+		activeCameraData.focalLengthCm	= 0.f;
 	}
 	else {
 		activeCameraData.isPerspective	= true;
 		activeCameraData.filmWidthCm	= 2.54 * camera.horizontalFilmAperture();
+		activeCameraData.focalLengthCm	= (camera.focalLength() / 10);
 	}
 }
 
@@ -248,24 +276,28 @@ void RayTracer::storeActiveCameraData()
 
 void RayTracer::computeAndStoreImagePlaneData()
 {
-	MVector xAxis = activeCameraData.viewDir ^ activeCameraData.upDir;
-	xAxis.normalize();
-	MVector yAxis = xAxis ^ activeCameraData.viewDir;
-	yAxis.normalize();
 
-	imagePlane.x = xAxis;
-	imagePlane.y = yAxis;
+	imagePlane.x = (activeCameraData.viewDir ^ activeCameraData.upDir).normal();
+	imagePlane.y = (imagePlane.x ^ activeCameraData.viewDir).normal();
 
 	MPoint centerPoint = activeCameraData.eye + ( activeCameraData.viewDir * activeCameraData.focalLengthCm );
 
 
-	double imgAspect = (double)imgWidth / (double)imgHeight;
+	double imgAspect = (double)imagePlane.imgWidth / (double)imagePlane.imgHeight;
 	//double pixelWidth = (activeCameraData.filmWidthCm)/(double)imgWidth;
 	//double pixelHeight = pixelWidth / imgAspect;
-	imagePlane.dp = ( activeCameraData.filmWidthCm)/(double)imgWidth;
+	imagePlane.dp = ( activeCameraData.filmWidthCm)/(double)imagePlane.imgWidth;
 
-	int halfWidth = imgWidth / 2;
-	int halfHeight = imgHeight / 2;
+
+	imagePlane.ssDp = imagePlane.dp / (double) (imagePlane.supersamplingCoeff + 1);
+	imagePlane.ssdx = imagePlane.x * imagePlane.ssDp;
+	imagePlane.ssdy = imagePlane.y * imagePlane.ssDp;
+
+	imagePlane.dx = imagePlane.x * imagePlane.dp;
+	imagePlane.dy = imagePlane.y * imagePlane.dp;
+
+	int halfWidth = imagePlane.imgWidth / 2;
+	int halfHeight = imagePlane.imgHeight / 2;
 
 	imagePlane.lb = centerPoint - (imagePlane.dp * halfWidth * imagePlane.x) - (imagePlane.dp * halfHeight * imagePlane.y);
 	imagePlane.lt = centerPoint - (imagePlane.dp * halfWidth * imagePlane.x) + (imagePlane.dp * halfHeight * imagePlane.y);
@@ -367,9 +399,9 @@ void RayTracer::storePointLight(MDagPath lightDagPath)
 
 #pragma endregion
 
-void RayTracer::storeMeshTexturingData(MeshDataT& m)
+void RayTracer::storeMeshTexturingData(MeshDataT& m, const MDagPath& path)
 {
-	MFnMesh fn(m.dagPath);
+	MFnMesh fn(path);
 	MObjectArray shaders;
 	MIntArray indices;
 	fn.getConnectedShaders(0, shaders, indices);
@@ -439,38 +471,44 @@ void RayTracer::computeAndStoreMeshData()
 
 	for(; !dagIterator.isDone(); dagIterator.next())
 	{
-		
+
 		MDagPath dagPath;
 		status = dagIterator.getPath(dagPath);
-		CHECK_MSTATUS(status);
-		
-		triangulateMesh(MFnMesh(dagPath));
-		pair<MPoint,MPoint> boundingBox = computeWfAxisAlignedBoundingBox(dagPath);
-		MeshDataT aMesh;
 
-		aMesh.dagPath = dagPath;
+
+		triangulateMesh(MFnMesh(dagPath));
+
+		pair<MPoint,MPoint> boundingBox = computeWfAxisAlignedBoundingBox(dagPath);
+		
+		MeshDataT aMesh;
 		aMesh.min = boundingBox.first;
 		aMesh.max = boundingBox.second;
-		storeMeshTexturingData(aMesh);
+		storeMeshTexturingData(aMesh,dagPath);
 
+		MFnMesh meshFn(dagPath);
+		int faceCount = meshFn.numPolygons();
+
+		totalPolyCount += faceCount; // Statistics
+
+		vector<Face>& faces = aMesh.faces;
+		faces.resize(faceCount);
 		MItMeshPolygon faceIt(dagPath);
-		for(; !faceIt.isDone(); faceIt.next())
+		for(int faceId = 0; !faceIt.isDone(); faceIt.next(), ++faceId)
 		{
-			Face f;
+			Face& f = faces[faceId];
 			faceIt.getPoints(f.vertices, MSpace::kWorld);
 			faceIt.getNormals(f.normals, MSpace::kWorld);
 			if(aMesh.hasTexture)
 			{
 				faceIt.getUVs(f.us, f.vs);
 			}
-			aMesh.faces.push_back(f);
 		}
 
 		meshesData.push_back(aMesh);
 
-		MFnMesh meshFn(dagPath);
 
-		totalPolyCount += meshFn.numPolygons();
+
+
 
 #ifdef PRINT_FOR_DEBUG
 		PRINT_IN_MAYA(MString("Storing mesh, bb is:") + pointToString(aMesh.min) + "," + pointToString(aMesh.max));
@@ -595,138 +633,165 @@ void RayTracer::computeVoxelMeshIntersections()
 		dimensionDeltaHalfs[i] = sceneParams.dimensionDeltaHalfs[i] + DOUBLE_NUMERICAL_THRESHHOLD;
 	}
 
-	int totalIntersections = 0;
-	for (int v = 0; v < voxelsData.size(); v++)
+	uint voxelNum = (uint)voxelsData.size();
+	uint meshNum = (uint)meshesData.size();
+	uint v, mid;
+	for (v = 0; v < voxelNum; v++)
 	{
-		int count = 0;
-		voxelsData[v].containedMeshIndexes.clear();
-		for (int m = 0; m < meshesData.size(); m++)
+		for (mid = 0; mid < meshNum; ++mid)
 		{
-			if ( voxelsData[v].v->intersectsWith(meshesData[m].min, meshesData[m].max) )
+			if ( voxelsData[v].v->intersectsWith(meshesData[mid].min, meshesData[mid].max) )
 			{
 				vector<int> faceIds;
-				if( voxelsData[v].v->intersectsWith(meshesData[m].dagPath, dimensionDeltaHalfs, faceIds))
+				if( voxelsData[v].v->intersectsWith(meshesData[mid], dimensionDeltaHalfs, faceIds))
 				{
-					voxelsData[v].meshIdToFaceIds[m] = faceIds;
+					voxelsData[v].meshIdToFaceIds[mid] = faceIds;
 				}
-				voxelsData[v].containedMeshIndexes.push_back(m);
-				count++;
-				totalIntersections++;
 			}
 		}
-		/*MString out = "Intersections per voxel ";
-		out += pointToString(voxelsData[v].v->min);
-		out += "x";
-		out += pointToString(voxelsData[v].v->max);
-		out += " is ";
-		out += count;
-		PRINT_IN_MAYA( out );*/
 	}
-#ifdef PRINT_FOR_DEBUG
-	PRINT_IN_MAYA((MString("TOTAL: ") + totalIntersections));
-#endif
+
 }
 
 void RayTracer::bresenhaim()
 {
-	unsigned char* pixels = new unsigned char[imgWidth*imgHeight*4];
-	memset(pixels,0,imgWidth*imgHeight*4);
+	int width = imagePlane.imgWidth;
+	int height = imagePlane.imgHeight;
+	unsigned char* pixels = new unsigned char[width*height*4];
+	memset(pixels,0,width*height*4);
+
+	int totalPixels = width*height;
 
 
-	double ssDp = imagePlane.dp / (double) (supersamplingCoeff + 1);
-	MVector ssdx = imagePlane.x * ssDp;
-	MVector ssdy = imagePlane.y * ssDp;
-
-	MVector dx = imagePlane.x * imagePlane.dp;
-	MVector dy = imagePlane.y * imagePlane.dp;
+	//int pixelCountSoFar = 0;
+	//double timePerPixelMean = 0;
+	//double M2 = 0;
 	
 
-	MPoint leftBottomOfPixel,bottomInPixel, leftBottomInPixel;
-	MPoint bottomOfPixel = imagePlane.lb;
-	int x, y, z;
-	
-	int meshIntersectionIndex, innerFaceIntersectionIndex;
-	MPoint intersectionPoint;
 
-	MPoint raySource = activeCameraData.eye;
-	MVector rayDirection = activeCameraData.viewDir;
-	MVector orthoFilOffset = (activeCameraData.focalLengthCm * activeCameraData.viewDir);
-
-	int pixelCountSoFar = 0;
-	double timePerPixelMean = 0;
-	double M2 = 0;
-	int totalPixels = imgHeight * imgWidth;
-	for( int h = 0; h < imgHeight; ++h,bottomOfPixel += dy )
+#pragma omp parallel for schedule(dynamic,100) num_threads(4)
+	for(int it = 0; it < totalPixels; ++it)
 	{
-		leftBottomOfPixel = bottomOfPixel;
-		for( int w = 0; w < imgWidth; ++w , leftBottomOfPixel += dx)
-		{
-			Profiler::startTimer("bresenhaim::timePerPixel");
-			
-			MColor pixelColor;
-			
-			bottomInPixel = leftBottomOfPixel + ssdy + ssdx;
-			for (int sh = 1; sh <= supersamplingCoeff; sh++, bottomInPixel += ssdy )
+		int w = it % width;
+		int h = it / width;
+
+		MColor pixelColor;
+
+		vector<MPoint> pointsOnPlane;
+		
+		imagePlane.getPointsOnIP(w, h, pointsOnPlane);
+		switch (imagePlane.ssType) {
+		case ImagePlaneDataT::UNIFORM:
+		case ImagePlaneDataT::JITTERED:
+		case ImagePlaneDataT::RANDOM:
 			{
-				leftBottomInPixel = bottomInPixel;
-				for (int sw = 1; sw <= supersamplingCoeff; sw++, leftBottomInPixel += ssdx)
+				int count = pointsOnPlane.size();
+				MPoint raySource = activeCameraData.eye;
+				MVector rayDirection = activeCameraData.viewDir;
+				for(int ssit = 0; ssit < count; ++ssit )
 				{
 					if (activeCameraData.isPerspective) {
-						rayDirection = (leftBottomInPixel - activeCameraData.eye).normal();
+						rayDirection = (pointsOnPlane[ssit] - activeCameraData.eye).normal();
 					}
 					else {
-						raySource = leftBottomInPixel - orthoFilOffset;
+						raySource = pointsOnPlane[ssit];
 					}
-
-					bool foundStartingVoxel = findStartingVoxelIndeces(raySource, rayDirection, x, y, z);
-
-					if (!foundStartingVoxel) {
+					int x, y, z;
+					int meshIntersectionIndex, innerFaceIntersectionIndex;
+					MPoint intersectionPoint;
+					if (!findStartingVoxelIndeces(raySource, rayDirection, x, y, z) ||
+						!closestIntersection(raySource, rayDirection, x, y, z, meshIntersectionIndex, innerFaceIntersectionIndex, intersectionPoint )) {
 						continue;
 					}
 
-					bool foundIntersection = closestIntersection(raySource, rayDirection, x, y, z, meshIntersectionIndex, innerFaceIntersectionIndex, intersectionPoint );
-
-					if(!foundIntersection) {
-						// Put the background
-						// currently black
-						continue;
-					}
-
-					pixelColor = sumColors(pixelColor, (calculatePixelColor(x, y, z, rayDirection, meshIntersectionIndex, innerFaceIntersectionIndex, intersectionPoint) / (float)(supersamplingCoeff*supersamplingCoeff)));
+					pixelColor = sumColors(pixelColor, (calculatePixelColor(x, y, z, rayDirection, meshIntersectionIndex, innerFaceIntersectionIndex, intersectionPoint) / (float)(count)));
 
 				}
 			}
-			pixels[h*imgWidth*4 + w*4] = (unsigned char) (pixelColor.r * 255.0);
-			pixels[h*imgWidth*4 + w*4 + 1] = (unsigned char) (pixelColor.g * 255.0);
-			pixels[h*imgWidth*4 + w*4 + 2] = (unsigned char) (pixelColor.b * 255.0);
+			break;
+		case ImagePlaneDataT::ADAPTIVE:
 
-			pixelCountSoFar++;
-			double elapsed = Profiler::finishTimer("bresenhaim::timePerPixel");
-			double delta = elapsed - timePerPixelMean;
-			timePerPixel += elapsed;
-			timePerPixelMean = timePerPixelMean + delta/(double)pixelCountSoFar;
-			M2 += delta * (elapsed - timePerPixelMean);
-
-			for (int cni = 1; cni < 10; cni++ ) {
-				if (cni*totalPixels/10 == pixelCountSoFar) {
-					cout << cni*10 << "% done" << endl;
-				}
-			}
-			
+			break;
 		}
+
+
+		pixels[h*width*4 + w*4] = (unsigned char) (pixelColor.r * 255.0);
+		pixels[h*width*4 + w*4 + 1] = (unsigned char) (pixelColor.g * 255.0);
+		pixels[h*width*4 + w*4 + 2] = (unsigned char) (pixelColor.b * 255.0);
+		
+
 	}
-	timePerPixel = timePerPixel / ( (double)pixelCountSoFar );
-	timePerPixelStandardDeviation = sqrt( M2 / ((double)pixelCountSoFar - 1) );
+
+	//MPoint leftBottomOfPixel,bottomInPixel, leftBottomInPixel;
+	//MPoint bottomOfPixel = imagePlane.lb;
+	//for( int h = 0; h < imgHeight; ++h,bottomOfPixel += dy )
+	//{
+	//	leftBottomOfPixel = bottomOfPixel;
+	//	for( int w = 0; w < imgWidth; ++w , leftBottomOfPixel += dx)
+	//	{
+	//		Profiler::startTimer("bresenhaim::timePerPixel");
+	//		
+	//		MColor pixelColor;
+	//		
+	//		bottomInPixel = leftBottomOfPixel + ssdy + ssdx;
+	//		for (int sh = 1; sh <= supersamplingCoeff; sh++, bottomInPixel += ssdy )
+	//		{
+	//			leftBottomInPixel = bottomInPixel;
+	//			for (int sw = 1; sw <= supersamplingCoeff; sw++, leftBottomInPixel += ssdx)
+	//			{
+	//				if (activeCameraData.isPerspective) {
+	//					rayDirection = (leftBottomInPixel - activeCameraData.eye).normal();
+	//				}
+	//				else {
+	//					raySource = leftBottomInPixel;
+	//				}
+	//				bool foundStartingVoxel = findStartingVoxelIndeces(raySource, rayDirection, x, y, z);
+	//				if (!foundStartingVoxel) {
+	//					continue;
+	//				}
+	//				bool foundIntersection = closestIntersection(raySource, rayDirection, x, y, z, meshIntersectionIndex, innerFaceIntersectionIndex, intersectionPoint );
+	//				if(!foundIntersection) {
+	//					// Put the background
+	//					// currently black
+	//					continue;
+	//				}
+	//				pixelColor = sumColors(pixelColor, (calculatePixelColor(x, y, z, rayDirection, meshIntersectionIndex, innerFaceIntersectionIndex, intersectionPoint) / (float)(supersamplingCoeff*supersamplingCoeff)));
+	//			}
+	//		}
+	//		pixels[h*imgWidth*4 + w*4] = (unsigned char) (pixelColor.r * 255.0);
+	//		pixels[h*imgWidth*4 + w*4 + 1] = (unsigned char) (pixelColor.g * 255.0);
+	//		pixels[h*imgWidth*4 + w*4 + 2] = (unsigned char) (pixelColor.b * 255.0);
+	//		pixelCountSoFar++;
+	//		double elapsed = Profiler::finishTimer("bresenhaim::timePerPixel");
+	//		double delta = elapsed - timePerPixelMean;
+	//		timePerPixel += elapsed;
+	//		timePerPixelMean = timePerPixelMean + delta/(double)pixelCountSoFar;
+	//		M2 += delta * (elapsed - timePerPixelMean);
+	//		for (int cni = 1; cni < 10; cni++ ) {
+	//			if (cni*totalPixels/10 == pixelCountSoFar) {
+	//				cout << cni*10 << "% done" << endl;
+	//			}
+	//		}
+	//		
+	//	}
+	//}
+	/*timePerPixel = timePerPixel / ( (double)pixelCountSoFar );
+	timePerPixelStandardDeviation = sqrt( M2 / ((double)pixelCountSoFar - 1) );*/
 	MImage img;
-	img.setPixels(pixels,imgWidth,imgHeight);
+	img.setPixels(pixels,width,height);
 	img.writeToFile(outputFilePath);
 	img.release();
 	delete [] pixels;
 }
 
+MColor RayTracer::shootRay(const MPoint& raySrc, const MVector& rayDir, int depth)
+{
+	return MColor();
+}
+
 bool RayTracer::findStartingVoxelIndeces(const MPoint& raySrc, const MVector& rayDirection, int& x, int& y, int& z)
 {
-	
+
 	if(activeCameraData.isPerspective && cameraInSceneBB)
 	{
 		x = initCameraVoxelX;
@@ -864,9 +929,9 @@ bool RayTracer::closestIntersection(const MPoint& raySource,const MVector& rayDi
 	MPoint currIntersection;
 	int cur3Dindex = sceneParams.flatten3dCubeIndex( x, y, z);
 	for(;x >= 0 && x < sceneParams.voxelsPerDimension &&
-		 y >= 0 && y < sceneParams.voxelsPerDimension && 
-		 z >= 0 && z < sceneParams.voxelsPerDimension; 
-				sceneParams.incrementIndeces(farAxisDir, x, y, z, cur3Dindex)) {
+		y >= 0 && y < sceneParams.voxelsPerDimension && 
+		z >= 0 && z < sceneParams.voxelsPerDimension; 
+	sceneParams.incrementIndeces(farAxisDir, x, y, z, cur3Dindex)) {
 		VoxelDataT& voxelData = voxelsData[cur3Dindex];
 		if(!voxelData.v->findExitDirection(raySource, rayDirection, farAxisDir)) {
 			break;
@@ -904,13 +969,13 @@ bool RayTracer::closestIntersectionInVoxel(const MPoint& raySource, const MVecto
 		{
 			intersectionTestCount++;
 			Face& face = mesh.faces[faceIds[currentFaceIndex]];
-/*
+			/*
 			mesh.getPolygonVertices(faceIds[currentFaceIndex], vertexIds);
 			if(vertexIds.length() != 3) {
-				continue;
+			continue;
 			}
 			for (int vi = 0; vi < 3; ++vi) {
-				mesh.getPoint(vertexIds[vi], triangleVertices[vi], MSpace::kWorld);
+			mesh.getPoint(vertexIds[vi], triangleVertices[vi], MSpace::kWorld);
 			}*/
 
 			if(!rayIntersectsTriangle(raySource, rayDirection, face.vertices, time, curIntersection)
@@ -944,20 +1009,20 @@ MColor RayTracer::calculatePixelColor(const int x, const int y, const int z,cons
 	float vs[3];
 	mesh.getPolygonVertices(innerFaceId, vertexIds);
 	if(vertexIds.length() != 3) {
-		MColor material( 0.25,0.25,0.25 );
-		return material;
+	MColor material( 0.25,0.25,0.25 );
+	return material;
 	}
 	for (int vi = 0; vi < 3; ++vi) {
-		mesh.getPoint(vertexIds[vi], triangleVertices[vi], MSpace::kWorld);
-		mesh.getFaceVertexNormal(innerFaceId, vertexIds[vi], triangleNormals[vi], MSpace::kWorld );
-		triangleNormals[vi].normalize();
-		mesh.getPolygonUV(innerFaceId, vi, us[vi], vs[vi]);
+	mesh.getPoint(vertexIds[vi], triangleVertices[vi], MSpace::kWorld);
+	mesh.getFaceVertexNormal(innerFaceId, vertexIds[vi], triangleNormals[vi], MSpace::kWorld );
+	triangleNormals[vi].normalize();
+	mesh.getPolygonUV(innerFaceId, vi, us[vi], vs[vi]);
 	}*/
 
 
 	double bc[3]; // baricentric coords
 
-	caclulateBaricentricCoordinates(face.vertices, intersection, bc );
+	calculateBaricentricCoordinates(face.vertices, intersection, bc );
 
 
 	MColor	specularMaterialColor	=	mesh.specular;
@@ -973,7 +1038,7 @@ MColor RayTracer::calculatePixelColor(const int x, const int y, const int z,cons
 		// get texture color at point using u,v and bilinear filter
 		double u = bc[0] * face.us[0] +  bc[1] * face.us[1] +  bc[2] * face.us[2];
 		double v = bc[0] * face.vs[0] +  bc[1] * face.vs[1] +  bc[2] * face.vs[2];
-		diffuseMaterialColor = getBilinearFilteredPixelColor(mesh.texture, u, v); 
+		diffuseMaterialColor = getBilinearFilteredPixelColor(mesh.texture, u, v);
 	}
 	MVector normalAtPoint = (bc[0] * face.normals[0] +  bc[1] * face.normals[1] +  bc[2] * face.normals[2]).normal();
 
@@ -1048,6 +1113,6 @@ MColor RayTracer::calculateSpecularAndDiffuse(const MVector& viewDirection, MVec
 			currColorComponent = sumColors(pow(k, specularPower) * mixedSpecular, currColorComponent);
 		}	
 	}
-	
+
 	return currColorComponent;
 }

@@ -31,6 +31,9 @@
 #include "Definitions.h"
 #include "Util.h"
 #include "Voxel.h"
+#include "Mesh.h"
+#include <stdlib.h>     /* srand, rand */
+#include <time.h>       /* time */
 
 
 using std::vector;
@@ -46,7 +49,10 @@ using namespace util;
 #define		heightFlag				"-h"
 #define		voxelsFlag				"-n"
 #define		supersamplingFlag		"-s"
+#define		superSamplingTypeFlag	"-ss"
 
+#define		RAND_PRECISION			1000
+#define		RAND					((double)( rand() % RAND_PRECISION)) / ((double) (RAND_PRECISION - 1))
 
 class RayTracer : public MPxCommand
 {
@@ -54,13 +60,13 @@ class RayTracer : public MPxCommand
 	MPoint maxScene;
 	vector<Plane> sceneBBPlanes;
 
-	int imgWidth;
-	int imgHeight;
+	//int imgWidth;
+	//int imgHeight;
 	bool cameraInSceneBB;
 	int initCameraVoxelX;
 	int initCameraVoxelY;
 	int initCameraVoxelZ;
-	int supersamplingCoeff;
+	//int supersamplingCoeff;
 
 	static char* outputFilePath;
 	static char* statisticsFilePath;
@@ -95,6 +101,12 @@ class RayTracer : public MPxCommand
 
 	struct ImagePlaneDataT
 	{
+		enum { UNIFORM, JITTERED, RANDOM, ADAPTIVE, UNDEFINED} ssType;
+
+		int			imgWidth;
+		int			imgHeight;
+
+
 		MVector		x;
 		MVector		y;
 
@@ -103,6 +115,61 @@ class RayTracer : public MPxCommand
 		MPoint		lb; //left bottom
 		MPoint		rb; //right bottom
 		double		dp; //delta p - pixel size
+
+		MVector		dx;
+		MVector		dy;
+
+
+		// Super sampling params
+		double		ssDp;
+		int			supersamplingCoeff;
+		MVector		ssdx;
+		MVector		ssdy;
+		
+
+		ImagePlaneDataT()
+		{
+			srand (time(NULL));
+		}
+
+		void	getPointsOnIP(const int w, const int h, vector<MPoint>& out ) const
+		{
+			out.clear();
+			switch (ssType)
+			{
+			case RayTracer::ImagePlaneDataT::UNIFORM: {
+					MPoint pixelLB = lb + h * dy + w * dx;
+					for(int ww = 1; ww <= supersamplingCoeff; ++ ww) {
+						for(int hh = 1; hh <= supersamplingCoeff; ++hh) {
+							out.push_back(pixelLB + hh * ssdx + ww * ssdy);
+						}
+					}
+				}
+				break;
+			case RayTracer::ImagePlaneDataT::JITTERED: {
+					MPoint pixelLB = lb + h * dy + w * dx;
+					for(int ww = 1; ww <= supersamplingCoeff; ++ ww) {
+						for(int hh = 1; hh <= supersamplingCoeff; ++hh) {
+							out.push_back(pixelLB + ((double) hh + RAND) * ssdx + ((double) ww + RAND) * ssdy);
+						}
+					}
+				}
+
+				break;
+			case RayTracer::ImagePlaneDataT::RANDOM: {
+					MPoint pixelLB = lb + h * dy + w * dx;
+					for(int r = 0; r < supersamplingCoeff; ++r) {
+						out.push_back(pixelLB + (RAND * dx) + (RAND * dy));
+					}
+				}
+				break;
+			case RayTracer::ImagePlaneDataT::ADAPTIVE:
+				break;
+			default:
+				break;
+			}
+		}
+
 	};
 
 	struct LightDataT
@@ -132,35 +199,9 @@ class RayTracer : public MPxCommand
 		
 	};
 
-	struct Face
-	{
-		MPointArray vertices;
-		MVectorArray normals;
-		MFloatArray us;
-		MFloatArray vs;
-	};
+	
 
-	struct MeshDataT
-	{
-		MDagPath	dagPath;
-
-		MPoint		max;		// WS axis aligned bounding box min
-		MPoint		min;		// WS axis aligned bounding box max
-
-		bool		hasTexture;
-		MImage*		texture;
-		MColor		diffuse;
-		MColor		specular;
-		MColor		ambient;
-		float		specularPower;
-
-		bool		useHalfVector;
-		float		eccentricity;
-		
-
-		vector<Face> faces;
-
-	};
+	
 
 	struct SceneParamT
 	{
@@ -224,7 +265,7 @@ class RayTracer : public MPxCommand
 	struct VoxelDataT
 	{
 		Voxel* v;
-		vector<int> containedMeshIndexes;
+		//vector<int> containedMeshIndexes;
 		map<int, vector<int>> meshIdToFaceIds;
 		
 	};
@@ -252,7 +293,7 @@ public:
 	void triangulateMesh(const MFnMesh& mesh);
 	void computeAndStoreMeshData();
 	void computeVoxelMeshIntersections();
-	void storeMeshTexturingData(MeshDataT& m);
+	void storeMeshTexturingData(MeshDataT& m, const MDagPath& path);
 #pragma endregion 
 
 #pragma region LIGHTS
@@ -276,13 +317,8 @@ public:
 #pragma endregion 
 
 #pragma region ALGO
-
-#pragma endregion 
-
 	void bresenhaim();
-	
-
-
+	MColor shootRay(const MPoint& raySrc, const MVector& rayDir, int depth);
 	bool closestIntersection(const MPoint& raySource,const MVector& rayDirection,int& x,int& y,int& z , int& meshIndex, int& innerFaceId, MPoint& intersection  );
 	bool closestIntersectionInVoxel(const MPoint& raySource, const MVector& rayDirection, VoxelDataT &voxelData, int &meshIndex, int &innerFaceId, MPoint &intersection);
 
@@ -301,5 +337,8 @@ public:
 	MColor calculatePixelColor(const int x, const int y, const int z,const MVector& rayDirection, const int meshIndex,const int innerFaceId,const MPoint& intersection );
 
 	MColor calculateSpecularAndDiffuse(const MVector& viewDirection, MVector& lightDirection,  MVector& normalAtPoint, MColor& mixedDiffuse, MColor& mixedSpecular, float specularPower, bool useHalfVector, float eccentricity);
+#pragma endregion 
+
+	
 
 };
