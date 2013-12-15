@@ -53,8 +53,9 @@ namespace util
 	MVector							reflectedRay(const MVector& ligthDir,const MVector& normal);
 	MVector							halfVector(const MVector& lightDir, const MVector& viewdDir );
 	
-	void							caclulateBaricentricCoordinates( MPoint triangleVertices[3], const MPoint& point, double baricentricCoords[3] );
-	void							caclulateBaricentricCoordinates(const MPointArray& triangleVertices, const MPoint& point, double baricentricCoords[3]);
+	
+	
+	void							calculateBaricentricCoordinates(const MPointArray& triangleVertices, const MPoint& point, double baricentricCoords[3]);
 
 
 	

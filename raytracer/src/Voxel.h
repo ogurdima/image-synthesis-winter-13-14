@@ -7,6 +7,7 @@
 #include "Plane.h"
 #include "Profiler.h"
 #include "Util.h"
+#include "Mesh.h"
 
 using std::vector;
 using namespace util;
@@ -33,8 +34,10 @@ public:
 		return max;
 	}
 
-	bool		intersectsWith(MPoint otherMin, MPoint otherMax);
-	bool		intersectsWith(const MDagPath& meshPath,const double halfsSides[3], vector<int>& faceIds) const;
+	bool		intersectsWith(const MPoint& otherMin, const MPoint& otherMax);
+
+	bool		intersectsWith(const MeshDataT& meshPath,const double halfsSides[3], vector<int>& faceIds) const;
+	
 	bool		findExitDirection(const MPoint& src, const MVector& dir, AxisDirection& farDir);
 };
 

@@ -59,6 +59,7 @@
       <PreprocessorDefinitions>_WINDLL;NT_PLUGIN;REQUIRE_IOSTREAM;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <AdditionalIncludeDirectories>$(MAYA_64_DIR)\include</AdditionalIncludeDirectories>
+      <OpenMPSupport>true</OpenMPSupport>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -111,6 +112,7 @@ if EXIST "$(MAYA_APP_DIR)\2014-x64\plugins$(TargetFileName)" (
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\src\Mesh.cpp" />
     <ClCompile Include="..\src\Plane.cpp" />
     <ClCompile Include="..\src\pluginMain.cpp" />
     <ClCompile Include="..\src\Profiler.cpp" />
@@ -120,6 +122,7 @@ if EXIST "$(MAYA_APP_DIR)\2014-x64\plugins$(TargetFileName)" (
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\Definitions.h" />
+    <ClInclude Include="..\src\Mesh.h" />
     <ClInclude Include="..\src\Plane.h" />
     <ClInclude Include="..\src\RayTracer.h" />
     <ClInclude Include="..\src\Util.h" />
