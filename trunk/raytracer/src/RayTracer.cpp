@@ -1,7 +1,7 @@
 #include "RayTracer.h"
 
 #include "Profiler.h"
-
+#include "Material.h"
 
 #ifdef _DEBUG
 #define DEBUG_REPORT 0
@@ -73,6 +73,8 @@ MSyntax RayTracer::newSyntax()
 	syntax.addFlag(voxelsFlag, "-voxels", MSyntax::kLong);
 	syntax.addFlag(supersamplingFlag, "-supersampling", MSyntax::kLong);
 	syntax.addFlag(superSamplingTypeFlag, "-supersamplingtype", MSyntax::kString);
+	syntax.addFlag(rayDepthFlag, "-rayDepth", MSyntax::kLong);
+
 
 	return syntax;
 }
@@ -82,6 +84,7 @@ bool RayTracer::parseArgs( const MArgList& args)
 	MArgParser    argData(syntax(), args);
 	MStatus s;
 	MString         arg;
+	bool defaultVal = true;
 
 	if ( argData.isFlagSet(widthFlag) ) {
 		uint arg;
@@ -137,6 +140,19 @@ bool RayTracer::parseArgs( const MArgList& args)
 		imagePlane.ssType = RayTracer::ImagePlaneDataT::UNIFORM;
 
 	
+	defaultVal = true;
+	if(argData.isFlagSet(rayDepthFlag)) {
+		uint depth;
+		s = argData.getFlagArgument(rayDepthFlag, 0, depth);
+		if (s == MStatus::kSuccess && depth >= 1) {
+			sceneParams.rayDepth = depth;
+			defaultVal = false;
+		}
+	}
+	if(defaultVal){
+		sceneParams.rayDepth = 1;
+	}
+
 	return true;
 }
 
@@ -407,15 +423,21 @@ void RayTracer::storeMeshTexturingData(MeshDataT& m, const MDagPath& path)
 	fn.getConnectedShaders(0, shaders, indices);
 	for(uint i = 0; i < shaders.length(); i++)
 	{
+
 		MPlugArray connections;
 		MFnDependencyNode shaderGroup(shaders[i]);
 		MPlug shaderPlug = shaderGroup.findPlug("surfaceShader");
 		shaderPlug.connectedTo(connections, true, false);
 		for(uint u = 0; u < connections.length(); u++)
-		{ 
+		{
 			if(connections[u].node().hasFn(MFn::kLambert))
 			{
 				MFnLambertShader lambertShader(connections[u].node());
+				MFnDependencyNode* dp = new MFnDependencyNode(connections[u].node());
+				Material mat;
+				MStringArray sets;
+				mat.load(dp, sets);
+				delete dp;
 				MImage* textureImage = new MImage();
 				if (getLambertShaderTexture(lambertShader, *textureImage)) 
 				{
@@ -428,6 +450,7 @@ void RayTracer::storeMeshTexturingData(MeshDataT& m, const MDagPath& path)
 					// assign diffuse and ambient color
 					m.hasTexture = false;
 					m.diffuse = lambertShader.color();
+					
 				}
 				m.useHalfVector = false;
 				m.ambient = lambertShader.ambientColor();
@@ -680,6 +703,7 @@ void RayTracer::bresenhaim()
 		vector<MPoint> pointsOnPlane;
 		
 		imagePlane.getPointsOnIP(w, h, pointsOnPlane);
+
 		switch (imagePlane.ssType) {
 		case ImagePlaneDataT::UNIFORM:
 		case ImagePlaneDataT::JITTERED:
@@ -696,15 +720,7 @@ void RayTracer::bresenhaim()
 					else {
 						raySource = pointsOnPlane[ssit];
 					}
-					int x, y, z;
-					int meshIntersectionIndex, innerFaceIntersectionIndex;
-					MPoint intersectionPoint;
-					if (!findStartingVoxelIndeces(raySource, rayDirection, x, y, z) ||
-						!closestIntersection(raySource, rayDirection, x, y, z, meshIntersectionIndex, innerFaceIntersectionIndex, intersectionPoint )) {
-						continue;
-					}
-
-					pixelColor = sumColors(pixelColor, (calculatePixelColor(x, y, z, rayDirection, meshIntersectionIndex, innerFaceIntersectionIndex, intersectionPoint) / (float)(count)));
+					pixelColor = sumColors(pixelColor, shootRay(raySource, rayDirection, 1) / ((float)(count)));
 
 				}
 			}
@@ -786,7 +802,84 @@ void RayTracer::bresenhaim()
 
 MColor RayTracer::shootRay(const MPoint& raySrc, const MVector& rayDir, int depth)
 {
-	return MColor();
+
+	int x, y, z;
+	int meshIdx, faceIdx;
+	MPoint intersection;
+	if (!findStartingVoxelIndeces(raySrc, rayDir, x, y, z) ||
+		!closestIntersection(raySrc, rayDir, x, y, z, meshIdx, faceIdx, intersection )) {
+			return BACKGROUND_COLOR;
+	}
+
+	MeshDataT& mesh = meshesData[meshIdx];
+	Face& face = meshesData[meshIdx].faces[faceIdx];
+
+
+	double bc[3]; // baricentric coords
+
+	calculateBaricentricCoordinates(face.vertices, intersection, bc );
+
+
+	MColor	specularMaterialColor	=	mesh.specular;
+	MColor	ambientMaterialColor	=	mesh.ambient;
+	float	specularPower			=	mesh.specularPower;
+	MColor	diffuseMaterialColor;
+	bool useHalfVector = mesh.useHalfVector;
+	float eccentricity = mesh.eccentricity;
+	if (!mesh.hasTexture) {
+		diffuseMaterialColor = mesh.diffuse;
+	}
+	else {
+		// get texture color at point using u,v and bilinear filter
+		double u = bc[0] * face.us[0] +  bc[1] * face.us[1] +  bc[2] * face.us[2];
+		double v = bc[0] * face.vs[0] +  bc[1] * face.vs[1] +  bc[2] * face.vs[2];
+		diffuseMaterialColor = getBilinearFilteredPixelColor(mesh.texture, u, v);
+	}
+
+	MVector normal = (bc[0] * face.normals[0] +  bc[1] * face.normals[1] +  bc[2] * face.normals[2]).normal();
+	MColor pixelColor = MColor(0,0,0,1);
+
+	int currX, currY, currZ;
+	MPoint secondIntersection;
+	int secondIntersectionMeshIndex, secondIntersectionFaceId;
+	for (int li = (int) lightingData.size()- 1; li >= 0; --li)
+	{
+		LightDataT & currLight = lightingData[li];
+		MColor mixedDiffuse = diffuseMaterialColor * currLight.color * currLight.intencity;
+		MColor mixedSpecular = specularMaterialColor * currLight.color * currLight.intencity;	
+		currX = x;
+		currY = y;
+		currZ = z;
+
+		switch (currLight.type)
+		{
+		case LightDataT::AMBIENT:
+			pixelColor = sumColors(ambientMaterialColor * currLight.color * currLight.intencity, pixelColor);
+			break;
+		case LightDataT::DIRECTIONAL:
+			if(! closestIntersection(intersection, -currLight.direction, currX, currY, currZ, secondIntersectionMeshIndex, secondIntersectionFaceId, secondIntersection )){
+				pixelColor = sumColors(calculateSpecularAndDiffuse(rayDir, currLight.direction, normal, mixedDiffuse, mixedSpecular, specularPower, useHalfVector, eccentricity), pixelColor);
+			}
+			break;
+		case LightDataT::POINT:
+			{
+				MVector lightDir = (intersection - currLight.position);
+				double distanceToLight = lightDir.length();
+				lightDir.normalize();
+
+				if(!closestIntersection(intersection, -lightDir, currX, currY, currZ, secondIntersectionMeshIndex, secondIntersectionFaceId, secondIntersection )
+					|| ((secondIntersection - intersection).length() >= distanceToLight) ){
+					
+					pixelColor = sumColors(calculateSpecularAndDiffuse(rayDir, lightDir, normal, mixedDiffuse, mixedSpecular, specularPower, useHalfVector, eccentricity), pixelColor) ;
+				}
+			}
+			break;
+		}
+	}
+
+
+
+	return pixelColor;
 }
 
 bool RayTracer::findStartingVoxelIndeces(const MPoint& raySrc, const MVector& rayDirection, int& x, int& y, int& z)

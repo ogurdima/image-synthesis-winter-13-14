@@ -50,9 +50,12 @@ using namespace util;
 #define		voxelsFlag				"-n"
 #define		supersamplingFlag		"-s"
 #define		superSamplingTypeFlag	"-ss"
+#define		rayDepthFlag			"-rd"
 
 #define		RAND_PRECISION			1000
 #define		RAND					((double)( rand() % RAND_PRECISION)) / ((double) (RAND_PRECISION - 1))
+
+#define		BACKGROUND_COLOR		MColor(0, 0, 0, 1)
 
 class RayTracer : public MPxCommand
 {
@@ -208,6 +211,8 @@ class RayTracer : public MPxCommand
 		//double		dx;
 		//double		dy;
 		//double		dz;
+
+		int rayDepth;
 
 		double dimensionDeltaHalfs[3];
 		double dimensionDeltas[3];
