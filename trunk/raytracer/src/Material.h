@@ -43,6 +43,7 @@
 #include <maya/MItSelectionList.h>
 #include <maya/MItDependencyGraph.h>
 #include <maya/MTime.h>
+#include <maya/MImage.h>
 #include <maya/MAnimControl.h>
 #include <maya/MAnimUtil.h>
 #include <maya/MRenderUtil.h>
@@ -57,7 +58,7 @@
 
 
 
-typedef enum {MT_SURFACE_SHADER,MT_LAMBERT,MT_PHONG,MT_BLINN,MT_CGFX} MaterialType;
+typedef enum {MT_LAMBERT,MT_PHONG} MaterialType;
 
 typedef enum {TOT_REPLACE,TOT_MODULATE,TOT_ADD,TOT_ALPHABLEND} TexOpType;
 
@@ -104,22 +105,29 @@ public:
 	//load material data
 	MStatus load(MFnDependencyNode* pShader,MStringArray& uvsets);
 	//load a specific material type
-	MStatus loadSurfaceShader(MFnDependencyNode* pShader);
+	//MStatus loadSurfaceShader(MFnDependencyNode* pShader);
 	MStatus loadLambert(MFnDependencyNode* pShader);
 	MStatus loadPhong(MFnDependencyNode* pShader);
-	MStatus loadBlinn(MFnDependencyNode* pShader);
-	MStatus loadCgFxShader(MFnDependencyNode* pShader);
+	//MStatus loadBlinn(MFnDependencyNode* pShader);
+	//MStatus loadCgFxShader(MFnDependencyNode* pShader);
+
+	void toDefault();
 
 public:
 	//load texture data
 	MStatus loadTexture(MFnDependencyNode* pTexNode,TexOpType& opType,MStringArray& uvsets);
 
-	MString m_name;
-	MaterialType m_type;
-	MColor m_ambient, m_diffuse, m_specular, m_emissive;
-	bool m_lightingOff;
-	bool m_isTransparent;
-	bool m_isTextured;
-	bool m_isMultiTextured;
-	std::vector<Texture> m_textures;
+	//MString m_name;
+	MaterialType type;
+	MColor ambient, diffuse, specular, emissive;
+	float diffuseCoeff;
+	bool isTransparent;
+	bool isTextured;
+
+	float cosPower;
+	float transparancy;
+
+	//bool m_isMultiTextured;
+	//std::vector<Texture> m_textures;
+	MImage * texture;
 };
