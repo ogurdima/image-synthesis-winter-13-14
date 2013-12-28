@@ -7,6 +7,7 @@
 #include <maya/MImage.h>
 #include <maya/MDagPath.h>
 #include <vector>
+#include "Material.h"
 
 
 using std::vector;
@@ -28,7 +29,7 @@ struct MeshDataT
 		MPoint		max;		// WS axis aligned bounding box min
 		MPoint		min;		// WS axis aligned bounding box max
 
-		bool		hasTexture;
+		/*bool		hasTexture;
 		MImage*		texture;
 		MColor		diffuse;
 		MColor		specular;
@@ -36,8 +37,9 @@ struct MeshDataT
 		float		specularPower;
 
 		bool		useHalfVector;
-		float		eccentricity;
+		float		eccentricity;*/
 		
+		Material	material;
 
 		vector<Face> faces;
 

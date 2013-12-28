@@ -200,6 +200,22 @@ class RayTracer : public MPxCommand
 			return MString(os.str().c_str());
 		}
 		
+		MVector directionToPoint(const MPoint & point)
+		{
+			if(type == DIRECTIONAL)
+				return direction;
+			if(type == POINT)
+				return (point - position).normal();
+			return MVector(0,0,-1);
+		}
+
+		double distanceToPoint(const MPoint & point)
+		{
+			if(type == POINT)
+				return (point - position).length();
+			return DBL_MAX;
+		}
+
 	};
 
 	
@@ -298,7 +314,7 @@ public:
 	void triangulateMesh(const MFnMesh& mesh);
 	void computeAndStoreMeshData();
 	void computeVoxelMeshIntersections();
-	void storeMeshTexturingData(MeshDataT& m, const MDagPath& path);
+	void storeMeshMaterial(MeshDataT& m, const MDagPath& path);
 #pragma endregion 
 
 #pragma region LIGHTS
@@ -324,7 +340,7 @@ public:
 #pragma region ALGO
 	void bresenhaim();
 	MColor shootRay(const MPoint& raySrc, const MVector& rayDir, int depth);
-	bool closestIntersection(const MPoint& raySource,const MVector& rayDirection,int& x,int& y,int& z , int& meshIndex, int& innerFaceId, MPoint& intersection  );
+	bool closestIntersection(const MPoint& raySource,const MVector& rayDirection,int& x,int& y,int& z , int& meshIndex, int& innerFaceId, MPoint& intersection, double depth = DBL_MAX );
 	bool closestIntersectionInVoxel(const MPoint& raySource, const MVector& rayDirection, VoxelDataT &voxelData, int &meshIndex, int &innerFaceId, MPoint &intersection);
 
 	bool findStartingVoxelIndeces(const MPoint& raySrc, const MVector& rayDirection, int& bx, int& by, int& bz);
@@ -337,11 +353,7 @@ public:
 
 	bool pointInVoxelByDirection( const MPoint& closestIntersection,VoxelDataT& voxel, AxisDirection uDirection );
 
-	//void incrementIndeces( AxisDirection uDirection, int& x, int& y, int& z, int& cur3dIndex );
-	
-	MColor calculatePixelColor(const int x, const int y, const int z,const MVector& rayDirection, const int meshIndex,const int innerFaceId,const MPoint& intersection );
-
-	MColor calculateSpecularAndDiffuse(const MVector& viewDirection, MVector& lightDirection,  MVector& normalAtPoint, MColor& mixedDiffuse, MColor& mixedSpecular, float specularPower, bool useHalfVector, float eccentricity);
+	MColor calculateSpecularAndDiffuse(const MVector& viewDirection,const MVector& lightDirection,const  MVector& normalAtPoint,const MColor& lightColor,const MeshDataT& mesh,const double* bc);
 #pragma endregion 
 
 	

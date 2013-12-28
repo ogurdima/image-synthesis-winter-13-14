@@ -59,7 +59,7 @@ namespace util
 
 
 	
-	bool							getLambertShaderTexture(MFnLambertShader& lambert, MImage& img);
+	//bool							getLambertShaderTexture(MFnLambertShader& lambert, MImage& img);
 
 	MColor							sumColors(const MColor& c1 , const MColor& c2);
 	MColor							textureNearesNeighborAtPoint(const MImage* texture, double u, double v, bool repeat = true);

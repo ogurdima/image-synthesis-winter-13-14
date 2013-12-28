@@ -189,22 +189,6 @@ namespace util
 		return false;
 	}
 
-	bool getLambertShaderTexture(MFnLambertShader& lambert, MImage& img)
-	{
-		MPlugArray plugs;
-		lambert.findPlug("color").connectedTo(plugs, true, false);
-		for(uint i = 0; i < plugs.length(); i++)
-		{
-			if (plugs[i].node().hasFn(MFn::kFileTexture))
-			{
-				img.release();
-				img.readFromTextureNode( plugs[i].node() );
-				return true;
-			}
-		}
-		return false;
-	}
-
 	MColor textureNearesNeighborAtPoint(const MImage* texture, double u, double v, bool repeat)
 	{
 		MColor res = MColor(0,0,0);
