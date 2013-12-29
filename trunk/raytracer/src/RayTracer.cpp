@@ -639,13 +639,6 @@ void RayTracer::bresenhaim()
 
 	int totalPixels = width*height;
 
-
-	//int pixelCountSoFar = 0;
-	//double timePerPixelMean = 0;
-	//double M2 = 0;
-	
-
-
 #pragma omp parallel for schedule(dynamic,100) num_threads(4)
 	for(int it = 0; it < totalPixels; ++it)
 	{
@@ -773,53 +766,69 @@ MColor RayTracer::shootRay(const MPoint& raySrc, const MVector& rayDir, int dept
 	calculateBaricentricCoordinates(face.vertices, intersection, bc );
 
 	MVector normal = (bc[0] * face.normals[0] +  bc[1] * face.normals[1] +  bc[2] * face.normals[2]).normal();
+	MColor diffuseMaterialColor;
+	// TODO: diffuse coefficient
+	if (!mat.isTextured) {
+		diffuseMaterialColor = mat.diffuse;
+	}
+	else {
+		// get texture color at point using u,v and bilinear filter
+		double u = bc[0] * face.us[0] +  bc[1] * face.us[1] +  bc[2] * face.us[2];
+		double v = bc[0] * face.vs[0] +  bc[1] * face.vs[1] +  bc[2] * face.vs[2];
+		diffuseMaterialColor = getBilinearFilteredPixelColor(mat.texture, u, v);
+	}
+	
 	MColor pixelColor = MColor(0,0,0,1);
-
-	int currX, currY, currZ;
-	MPoint secondIntersection;
-	int secondIntersectionMeshIndex, secondIntersectionFaceId;
 	for (int li = (int) lightingData.size()- 1; li >= 0; --li)
 	{
 		LightDataT & currLight = lightingData[li];
 		MColor lightColor = currLight.color * currLight.intencity;
-		currX = x;
-		currY = y;
-		currZ = z;
 
-		bool calcSpecAndDiffuse = false;
-		MVector lightDir;
 		if( LightDataT::AMBIENT == currLight.type) {
 			pixelColor = sumColors(mat.ambient * lightColor, pixelColor);
 		}
 		else if(LightDataT::DIRECTIONAL == currLight.type || LightDataT::POINT == currLight.type)
 		{
 			MVector lightDir = currLight.directionToPoint(intersection);
-			double depth = currLight.distanceToPoint(intersection);
-			if(! closestIntersection(intersection, -lightDir , currX, currY, currZ, secondIntersectionMeshIndex, secondIntersectionFaceId, secondIntersection, depth )){
-
-				MColor diffuseMaterialColor;
-				// TODO: diffuse coefficient
-				if (!mat.isTextured) {
-					diffuseMaterialColor = mat.diffuse;
+			MVector	intersectionToLight = -lightDir;
+			double diffuseComponent = (intersectionToLight * normal);
+			bool isInShadow = false;
+			{
+				int currX = x, currY = y, currZ = z;
+				double depth = currLight.distanceToPoint(intersection);
+				MPoint shadowIntersection;
+				int shadowMeshId, shadowFaceId;
+				MPoint shadowStartingPoint = intersection + intersectionToLight * DOUBLE_NUMERICAL_THRESHHOLD * 10;
+				if(diffuseComponent > 0.01 && closestIntersection(shadowStartingPoint, intersectionToLight , currX, currY, currZ, shadowMeshId, shadowFaceId, shadowIntersection, depth )) {
+					isInShadow = true;
+				}
+				if (diffuseComponent < 0.1 && isInShadow) {
+					isInShadow = false;
+					double diff = (0.1 - diffuseComponent);
+					double newComponent = diffuseComponent - diff*diff;
+					diffuseComponent = newComponent > 0 ? newComponent : 0; // oooooo magic! does not work actually
+				}
+			}
+			if(! isInShadow ) {
+				
+				if (diffuseComponent > 0) {
+					pixelColor = sumColors(diffuseComponent * diffuseMaterialColor * lightColor, pixelColor);
 				}
 				else {
-					// get texture color at point using u,v and bilinear filter
-					double u = bc[0] * face.us[0] +  bc[1] * face.us[1] +  bc[2] * face.us[2];
-					double v = bc[0] * face.vs[0] +  bc[1] * face.vs[1] +  bc[2] * face.vs[2];
-					diffuseMaterialColor = getBilinearFilteredPixelColor(mat.texture, u, v);
-				}
-
-				float k = (float) (lightDir * normal);
-				if (k < 0) {
-					pixelColor = sumColors(-k * diffuseMaterialColor * lightColor, pixelColor);
+					//return MColor(1,0,0,1);
 				}
 				if (mat.cosPower > 0) {
-					k = -(float)(reflectedRay(lightDir, normal) * rayDir);
-					if(k > 0) {
-						pixelColor = sumColors(pow(k, mat.cosPower) * mat.specular * lightColor, pixelColor);
-					}	
+					double specularComponent = -(float)(reflectedRay(lightDir, normal) * rayDir);
+					if(specularComponent > 0) {
+						pixelColor = sumColors(pow(specularComponent, mat.cosPower) * mat.specular * lightColor, pixelColor);
+					}
+					else {
+						//return MColor(1,1,0,1);
+					}
 				}
-
+			}
+			else {
+				//return MColor(0,0,1,1);
 			}
 		}
 	}
@@ -968,10 +977,11 @@ bool RayTracer::closestIntersection(const MPoint& raySource,const MVector& rayDi
 	int currMeshIndex, currInnerFaceId;
 	MPoint currIntersection;
 	int cur3Dindex = sceneParams.flatten3dCubeIndex( x, y, z);
-	for(;x >= 0 && x < sceneParams.voxelsPerDimension &&
-		y >= 0 && y < sceneParams.voxelsPerDimension && 
-		z >= 0 && z < sceneParams.voxelsPerDimension; 
-	sceneParams.incrementIndeces(farAxisDir, x, y, z, cur3Dindex)) {
+
+	for(	;
+			x >= 0 && x < sceneParams.voxelsPerDimension && y >= 0 && y < sceneParams.voxelsPerDimension && z >= 0 && z < sceneParams.voxelsPerDimension; 
+			sceneParams.incrementIndeces(farAxisDir, x, y, z, cur3Dindex)) 
+	{
 		VoxelDataT& voxelData = voxelsData[cur3Dindex];
 		if(!voxelData.v->findExitDirection(raySource, rayDirection, farAxisDir)) {
 			break;
@@ -982,12 +992,13 @@ bool RayTracer::closestIntersection(const MPoint& raySource,const MVector& rayDi
 		if(!closestIntersectionInVoxel(raySource, rayDirection, voxelData, currMeshIndex, currInnerFaceId, currIntersection)) {
 			continue;
 		}
-
-		if( (intersection - raySource).length() > depth) {
+		double distToIntersection = (currIntersection - raySource).length();
+		if( distToIntersection > depth ) {
 			return false;
 		}
-
-
+		if (distToIntersection < DOUBLE_NUMERICAL_THRESHHOLD) {
+			continue;
+		}
 		meshIndex = currMeshIndex;
 		innerFaceId = currInnerFaceId;
 		intersection = currIntersection;
@@ -1024,7 +1035,8 @@ bool RayTracer::closestIntersectionInVoxel(const MPoint& raySource, const MVecto
 			}*/
 
 			if(!rayIntersectsTriangle(raySource, rayDirection, face.vertices, time, curIntersection)
-				|| !isPointInVolume(curIntersection, voxelData.v->Min(), voxelData.v->Max()))
+				|| !isPointInVolume(curIntersection, voxelData.v->Min(), voxelData.v->Max())
+				|| ((curIntersection - raySource)*rayDirection) < 0)
 			{
 				continue;
 			}

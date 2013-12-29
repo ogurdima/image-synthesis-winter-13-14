@@ -55,7 +55,7 @@ using namespace util;
 #define		RAND_PRECISION			1000
 #define		RAND					((double)( rand() % RAND_PRECISION)) / ((double) (RAND_PRECISION - 1))
 
-#define		BACKGROUND_COLOR		MColor(0, 0, 0, 1)
+#define		BACKGROUND_COLOR		MColor(0.41, 0.48, 0.53, 1)
 
 class RayTracer : public MPxCommand
 {
@@ -206,6 +206,7 @@ class RayTracer : public MPxCommand
 				return direction;
 			if(type == POINT)
 				return (point - position).normal();
+			throw std::exception();
 			return MVector(0,0,-1);
 		}
 
@@ -215,6 +216,8 @@ class RayTracer : public MPxCommand
 				return (point - position).length();
 			return DBL_MAX;
 		}
+
+
 
 	};
 
