@@ -112,6 +112,7 @@ if EXIST "$(MAYA_APP_DIR)\2014-x64\plugins$(TargetFileName)" (
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\src\chi2inv.cpp" />
     <ClCompile Include="..\src\Material.cpp" />
     <ClCompile Include="..\src\Mesh.cpp" />
     <ClCompile Include="..\src\Plane.cpp" />
@@ -123,6 +124,7 @@ if EXIST "$(MAYA_APP_DIR)\2014-x64\plugins$(TargetFileName)" (
     <ClCompile Include="..\src\Voxel.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\src\chi2inv.h" />
     <ClInclude Include="..\src\Definitions.h" />
     <ClInclude Include="..\src\Material.h" />
     <ClInclude Include="..\src\Mesh.h" />

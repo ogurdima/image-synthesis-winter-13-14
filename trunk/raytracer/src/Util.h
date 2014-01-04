@@ -65,5 +65,12 @@ namespace util
 	MColor							textureNearesNeighborAtPoint(const MImage* texture, double u, double v, bool repeat = true);
 	MColor							getBilinearFilteredPixelColor(const MImage* texture, double u, double v);
 
+
+
+	double							nextExpectation(double prevExpectation, int numSamples, double lastSample);
+	double							nextVariance(double prevVariance, double prevExpectation, double nextExpectation, int numSamples, double lastSample);
+	MColor							nextColorExpectation(MColor prevExpectation, int numSamples, MColor lastSample);
+	MColor							nextColorVariance(MColor prevVariance, MColor prevExpectation, MColor nextExpectation, int numSamples, MColor lastSample);
+
 };
 
