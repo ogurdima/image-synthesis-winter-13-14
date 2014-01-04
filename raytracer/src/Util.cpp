@@ -359,6 +359,63 @@ namespace util
 		return res;
 	}
 
+
+	void probablility()
+	{
+		/*
+		n is number of samples so far?
+		Betha - probability of error in our estimate
+		sigma2 - variance of the original signal
+		mu - expectation of the original signal
+		E(mu n) = mu => if variance of mu n is small we are good
+		var (mu n) = sigma2/n
+
+		Condition: Prob(Var(mu n) < T) >= 1-Betha
+
+		Stornger condition: (sigma n)2 / m(n,betha) < T
+		This is because Dist[n * (signa n)2 / sigma2] is chi2
+
+
+		incremental expectation
+		mu n = mu (n-1) + (1/n)(last sample - mu (n-1))
+		incremental variance
+
+		Vn = (sigma n)2 * n
+		Vn = V(n-1) + (sample - mu (n-1) )(sample - mu n)
+		(sigma n)2 = Vn/n
+
+
+		*/
+	}
+
+	double nextExpectation(double prevExpectation, int numSamples, double lastSample) {
+		return prevExpectation + (1/numSamples)*(lastSample - prevExpectation);
+	}
+
+	double nextVariance(double prevVariance, double prevExpectation, double nextExpectation, int numSamples, double lastSample) {
+		double prevV = prevVariance * (numSamples - 1);
+		double nextV = prevV + (lastSample - prevExpectation)*(lastSample - nextExpectation);
+		return nextV / numSamples;
+	}
+
+	MColor nextColorExpectation(MColor prevExpectation, int numSamples, MColor lastSample) {
+		MColor nextColorE;
+		for (int i = 0; i < 4; i++) {
+			nextColorE[i] = nextExpectation(prevExpectation[i], numSamples, lastSample[i]);
+		}
+		return nextColorE;
+	}
+
+	MColor nextColorVariance(MColor prevVariance, MColor prevExpectation, MColor nextExpectation, int numSamples, MColor lastSample) {
+		MColor nextColorVar;
+		for (int i = 0; i < 4; i++) {
+			nextColorVar[i] = nextVariance(prevVariance[i], prevExpectation[i], nextExpectation[i], numSamples, lastSample[i]); 
+		}
+		return nextColorVar;
+	}
+
+
+
 //scary
 #pragma region 
 	
