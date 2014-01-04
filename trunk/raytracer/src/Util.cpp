@@ -389,13 +389,13 @@ namespace util
 	}
 
 	double nextExpectation(double prevExpectation, int numSamples, double lastSample) {
-		return prevExpectation + (1/numSamples)*(lastSample - prevExpectation);
+		return prevExpectation + (1/(double)numSamples)*(lastSample - prevExpectation);
 	}
 
 	double nextVariance(double prevVariance, double prevExpectation, double nextExpectation, int numSamples, double lastSample) {
 		double prevV = prevVariance * (numSamples - 1);
 		double nextV = prevV + (lastSample - prevExpectation)*(lastSample - nextExpectation);
-		return nextV / numSamples;
+		return nextV / (double)numSamples;
 	}
 
 	MColor nextColorExpectation(MColor prevExpectation, int numSamples, MColor lastSample) {
@@ -414,6 +414,27 @@ namespace util
 		return nextColorVar;
 	}
 
+	MColor nextColorAverage(MColor prevAverage, int numSamples, MColor lastSample) {
+		MColor nextColorA;
+		for (int i = 0; i < 4; i++) {
+			nextColorA[i] = (prevAverage[i] * (numSamples-1) + lastSample[i]) / (double)numSamples;
+		}
+		return nextColorA;
+	}
+
+	// T is threshhold, betha is probability of error
+	bool varianceIsSmallEnough(MColor colorVariance, int numSamples, double thresh, double errorProbability)
+	{
+		if (numSamples < 1) {
+			return false;
+		}
+		for (int i = 0; i < 4; i++) {
+			if ( colorVariance[i] >= thresh * Chi2Inv::chi2inv(errorProbability, numSamples) ) {
+				return false;
+			}	
+		}
+		return true;
+	}
 
 
 //scary
