@@ -68,23 +68,26 @@ MSyntax RayTracer::newSyntax()
 {
 	MSyntax syntax;
 
-	syntax.addFlag(widthFlag, "-width", MSyntax::kLong);
-	syntax.addFlag(heightFlag, "-height", MSyntax::kLong);
-	syntax.addFlag(voxelsFlag, "-voxels", MSyntax::kLong);
-	syntax.addFlag(supersamplingFlag, "-supersampling", MSyntax::kLong);
-	syntax.addFlag(superSamplingTypeFlag, "-supersamplingtype", MSyntax::kString);
-	syntax.addFlag(rayDepthFlag, "-rayDepth", MSyntax::kLong);
+	syntax.addFlag(widthFlag, "-widthFlag", MSyntax::kLong);
+	syntax.addFlag(heightFlag, "-heightFlag", MSyntax::kLong);
+	syntax.addFlag(voxelsFlag, "-voxelsFlag", MSyntax::kLong);
+	syntax.addFlag(rayDepthFlag, "-rayDepthFlag", MSyntax::kLong);
 
+	syntax.addFlag(supersamplingFlag, "-supersamplingFlag", MSyntax::kLong);
+	syntax.addFlag(samplingRateFlag, "-samplingRateFlag", MSyntax::kLong);
+
+	syntax.addFlag(superSamplingTypeFlag, "-superSamplingTypeFlag", MSyntax::kString);
+	syntax.addFlag(toleranceFlag, "-toleranceFlag", MSyntax::kDouble);
+	syntax.addFlag("-mi", maxSamplingRateFlag, MSyntax::kLong);
+	syntax.addFlag("-ma", minSamplingRateFlag, MSyntax::kLong);
 
 	return syntax;
 }
 
 bool RayTracer::parseArgs( const MArgList& args)
 {
-	MArgParser    argData(syntax(), args);
-	MStatus s;
-	MString         arg;
-	bool defaultVal = true;
+	MArgParser		argData(syntax(), args);
+	MStatus			s;
 
 	if ( argData.isFlagSet(widthFlag) ) {
 		uint arg;
@@ -115,17 +118,22 @@ bool RayTracer::parseArgs( const MArgList& args)
 		uint arg;
 		s = argData.getFlagArgument(supersamplingFlag, 0, arg);	
 		if (s == MStatus::kSuccess) {
-			// do stuff
 			imagePlane.supersamplingCoeff = (arg < 1) ? 1 : arg;
 		}
 	}
 
-	imagePlane.ssType = RayTracer::ImagePlaneDataT::UNDEFINED;
+	if ( argData.isFlagSet(samplingRateFlag) ) {
+		uint arg;
+		s = argData.getFlagArgument(samplingRateFlag, 0, arg);	
+		if (s == MStatus::kSuccess) {
+			imagePlane.supersamplingCoeff = (arg < 1) ? 1 : arg;
+		}
+	}
+
 	if ( argData.isFlagSet(superSamplingTypeFlag) ) {
 		MString arg;
 		s = argData.getFlagArgument(superSamplingTypeFlag, 0, arg);	
 		if (s == MStatus::kSuccess) {
-			// do stuff
 			if(arg == "uniform")
 				imagePlane.ssType = RayTracer::ImagePlaneDataT::UNIFORM;
 			else if(arg == "jittered")
@@ -136,21 +144,40 @@ bool RayTracer::parseArgs( const MArgList& args)
 				imagePlane.ssType = RayTracer::ImagePlaneDataT::ADAPTIVE;
 		}
 	}
-	if(imagePlane.ssType == RayTracer::ImagePlaneDataT::UNDEFINED)
-		imagePlane.ssType = RayTracer::ImagePlaneDataT::UNIFORM;
 
-	
-	defaultVal = true;
 	if(argData.isFlagSet(rayDepthFlag)) {
 		uint depth;
 		s = argData.getFlagArgument(rayDepthFlag, 0, depth);
 		if (s == MStatus::kSuccess && depth >= 1) {
 			sceneParams.rayDepth = depth;
-			defaultVal = false;
 		}
 	}
-	if(defaultVal){
-		sceneParams.rayDepth = 1;
+
+	if ( argData.isFlagSet(toleranceFlag) ) {
+		double arg;
+		s = argData.getFlagArgument(toleranceFlag, 0, arg);	
+		if (s == MStatus::kSuccess) {
+			imagePlane.ssAdaptiveTolerance = arg;
+		}
+	}
+
+	if ( argData.isFlagSet(maxSamplingRateFlag) ) {
+		uint arg;
+		s = argData.getFlagArgument(maxSamplingRateFlag, 0, arg);	
+		if (s == MStatus::kSuccess) {
+			imagePlane.ssAdaptiveMaxSamples = (arg < 1) ? 1 : arg;
+			if (imagePlane.ssAdaptiveMaxSamples > 128) {
+				imagePlane.ssAdaptiveMaxSamples = 128;
+			}
+		}
+	}
+
+	if ( argData.isFlagSet(minSamplingRateFlag) ) {
+		uint arg;
+		s = argData.getFlagArgument(minSamplingRateFlag, 0, arg);	
+		if (s == MStatus::kSuccess) {
+			imagePlane.ssAdaptiveMinSamples = (arg < 1) ? 1 : arg;
+		}
 	}
 
 	return true;
@@ -160,10 +187,17 @@ RayTracer::RayTracer()
 {
 	imagePlane.imgWidth = 1920;
 	imagePlane.imgHeight = 1080;
-	sceneParams.voxelsPerDimension = 1;
 	imagePlane.supersamplingCoeff = 1;
-	sceneParams.voxelsPerDimensionSqr = 1;
+	imagePlane.ssType = RayTracer::ImagePlaneDataT::UNIFORM;
 
+	imagePlane.ssAdaptiveTolerance = 5;
+	imagePlane.ssAdaptiveMinSamples = 1;
+	imagePlane.ssAdaptiveMaxSamples = 128;
+	imagePlane.ssAdaptiveErrorProbability = 0.1;
+
+	sceneParams.voxelsPerDimension = 1;
+	sceneParams.voxelsPerDimensionSqr = 1;
+	sceneParams.rayDepth = 1;
 
 	prepTime = 0;
 	totalTime = 0;
@@ -639,7 +673,7 @@ void RayTracer::bresenhaim()
 
 	int totalPixels = width*height;
 
-#pragma omp parallel for schedule(dynamic,100) num_threads(4)
+//#pragma omp parallel for schedule(dynamic,100) num_threads(8)
 	for(int it = 0; it < totalPixels; ++it)
 	{
 		int w = it % width;
@@ -673,73 +707,61 @@ void RayTracer::bresenhaim()
 			}
 			break;
 		case ImagePlaneDataT::ADAPTIVE:
+			bool needToStop = false;
+			int count = 0;
+			MPoint raySource = activeCameraData.eye;
+			MVector rayDirection = activeCameraData.viewDir;
 
+			MColor newColor;
+			MColor colorExpectation;
+			MColor colorPrevExpectation;
+			MColor colorVariance;
+
+			while (!needToStop) {
+				MPoint nextPoint = imagePlane.nextRandomPointOnIP(w, h);
+				if (activeCameraData.isPerspective) {
+					rayDirection = (nextPoint - activeCameraData.eye).normal();
+				}
+				else {
+					raySource = nextPoint;
+				}
+				newColor = shootRay(raySource, rayDirection, 1); 
+				count++;
+				
+				if (1 == count) // first ray - here we initialize all the variance things
+				{
+					pixelColor = newColor;
+					colorPrevExpectation = newColor;
+					colorExpectation = newColor;
+					colorVariance = MColor(0,0,0,0);
+				}
+				else 
+				{
+					pixelColor = nextColorAverage(pixelColor, count, newColor);
+					colorPrevExpectation = colorExpectation;
+					colorExpectation = nextColorExpectation(colorExpectation, count, newColor);
+					colorVariance = nextColorVariance(colorVariance, colorPrevExpectation, colorExpectation, count, newColor);
+				}
+
+				if (count >= imagePlane.ssAdaptiveMaxSamples) 
+				{
+					needToStop = true;
+				}
+				else if (count >= imagePlane.ssAdaptiveMinSamples) {
+					if (varianceIsSmallEnough(colorVariance, count, imagePlane.ssAdaptiveTolerance, imagePlane.ssAdaptiveErrorProbability)) {
+						needToStop = true;
+					}
+				}
+			}
 			break;
 		}
-
 
 		pixels[h*width*4 + w*4] = (unsigned char) (pixelColor.r * 255.0);
 		pixels[h*width*4 + w*4 + 1] = (unsigned char) (pixelColor.g * 255.0);
 		pixels[h*width*4 + w*4 + 2] = (unsigned char) (pixelColor.b * 255.0);
 		
-
 	}
 
-	//MPoint leftBottomOfPixel,bottomInPixel, leftBottomInPixel;
-	//MPoint bottomOfPixel = imagePlane.lb;
-	//for( int h = 0; h < imgHeight; ++h,bottomOfPixel += dy )
-	//{
-	//	leftBottomOfPixel = bottomOfPixel;
-	//	for( int w = 0; w < imgWidth; ++w , leftBottomOfPixel += dx)
-	//	{
-	//		Profiler::startTimer("bresenhaim::timePerPixel");
-	//		
-	//		MColor pixelColor;
-	//		
-	//		bottomInPixel = leftBottomOfPixel + ssdy + ssdx;
-	//		for (int sh = 1; sh <= supersamplingCoeff; sh++, bottomInPixel += ssdy )
-	//		{
-	//			leftBottomInPixel = bottomInPixel;
-	//			for (int sw = 1; sw <= supersamplingCoeff; sw++, leftBottomInPixel += ssdx)
-	//			{
-	//				if (activeCameraData.isPerspective) {
-	//					rayDirection = (leftBottomInPixel - activeCameraData.eye).normal();
-	//				}
-	//				else {
-	//					raySource = leftBottomInPixel;
-	//				}
-	//				bool foundStartingVoxel = findStartingVoxelIndeces(raySource, rayDirection, x, y, z);
-	//				if (!foundStartingVoxel) {
-	//					continue;
-	//				}
-	//				bool foundIntersection = closestIntersection(raySource, rayDirection, x, y, z, meshIntersectionIndex, innerFaceIntersectionIndex, intersectionPoint );
-	//				if(!foundIntersection) {
-	//					// Put the background
-	//					// currently black
-	//					continue;
-	//				}
-	//				pixelColor = sumColors(pixelColor, (calculatePixelColor(x, y, z, rayDirection, meshIntersectionIndex, innerFaceIntersectionIndex, intersectionPoint) / (float)(supersamplingCoeff*supersamplingCoeff)));
-	//			}
-	//		}
-	//		pixels[h*imgWidth*4 + w*4] = (unsigned char) (pixelColor.r * 255.0);
-	//		pixels[h*imgWidth*4 + w*4 + 1] = (unsigned char) (pixelColor.g * 255.0);
-	//		pixels[h*imgWidth*4 + w*4 + 2] = (unsigned char) (pixelColor.b * 255.0);
-	//		pixelCountSoFar++;
-	//		double elapsed = Profiler::finishTimer("bresenhaim::timePerPixel");
-	//		double delta = elapsed - timePerPixelMean;
-	//		timePerPixel += elapsed;
-	//		timePerPixelMean = timePerPixelMean + delta/(double)pixelCountSoFar;
-	//		M2 += delta * (elapsed - timePerPixelMean);
-	//		for (int cni = 1; cni < 10; cni++ ) {
-	//			if (cni*totalPixels/10 == pixelCountSoFar) {
-	//				cout << cni*10 << "% done" << endl;
-	//			}
-	//		}
-	//		
-	//	}
-	//}
-	/*timePerPixel = timePerPixel / ( (double)pixelCountSoFar );
-	timePerPixelStandardDeviation = sqrt( M2 / ((double)pixelCountSoFar - 1) );*/
 	MImage img;
 	img.setPixels(pixels,width,height);
 	img.writeToFile(outputFilePath);

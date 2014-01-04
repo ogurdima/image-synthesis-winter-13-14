@@ -23,6 +23,7 @@
 #include <maya/MPlugArray.h>
 #include "Definitions.h"
 #include "Profiler.h"
+#include "chi2inv.h"
 
 using std::vector;
 using std::string;
@@ -71,6 +72,7 @@ namespace util
 	double							nextVariance(double prevVariance, double prevExpectation, double nextExpectation, int numSamples, double lastSample);
 	MColor							nextColorExpectation(MColor prevExpectation, int numSamples, MColor lastSample);
 	MColor							nextColorVariance(MColor prevVariance, MColor prevExpectation, MColor nextExpectation, int numSamples, MColor lastSample);
-
+	MColor							nextColorAverage(MColor prevAverage, int numSamples, MColor lastSample) ;
+	bool							varianceIsSmallEnough(MColor colorVariance, int numSamples, double thresh, double errorProbability);
 };
 

@@ -49,8 +49,14 @@ using namespace util;
 #define		heightFlag				"-h"
 #define		voxelsFlag				"-n"
 #define		supersamplingFlag		"-s"
+#define		samplingRateFlag		"-sr"
 #define		superSamplingTypeFlag	"-ss"
 #define		rayDepthFlag			"-rd"
+#define		toleranceFlag			"-t"
+#define		maxSamplingRateFlag		"-masr"
+#define		minSamplingRateFlag		"-misr"
+
+
 
 #define		RAND_PRECISION			1000
 #define		RAND					((double)( rand() % RAND_PRECISION)) / ((double) (RAND_PRECISION - 1))
@@ -130,6 +136,11 @@ class RayTracer : public MPxCommand
 		MVector		ssdy;
 		
 
+		double		ssAdaptiveTolerance;
+		int			ssAdaptiveMinSamples;
+		int			ssAdaptiveMaxSamples;
+		double		ssAdaptiveErrorProbability;
+
 		ImagePlaneDataT()
 		{
 			srand (time(NULL));
@@ -171,6 +182,11 @@ class RayTracer : public MPxCommand
 			default:
 				break;
 			}
+		}
+
+		MPoint nextRandomPointOnIP(const int w, const int h) const {
+			MPoint pixelLB = lb + h * dy + w * dx;
+			return pixelLB + (RAND * dx) + (RAND * dy);
 		}
 
 	};
