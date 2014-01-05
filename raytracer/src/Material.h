@@ -122,10 +122,16 @@ public:
 	MColor ambient, diffuse, specular, emissive;
 	float diffuseCoeff;
 	bool isTransparent;
+	bool isReflective;
 	bool isTextured;
 
 	float cosPower;
-	float transparancy;
+	float transparency;
+	float refractiveIndex;
+
+	double kr0;
+
+	float reflectivity;
 
 	//bool m_isMultiTextured;
 	//std::vector<Texture> m_textures;
