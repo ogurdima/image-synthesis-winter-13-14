@@ -80,16 +80,21 @@ class RayTracer : public MPxCommand
 	static char* outputFilePath;
 	static char* statisticsFilePath;
 
-	static double prepTime;
-	static double totalTime;
-	static double timePerPixel;
-	static double timePerPixelStandardDeviation;
-	static long intersectionTestCount;
-	static long intersectionFoundCount; 
-	static long voxelsTraversed;
-	static long totalRayCount;
-	static long totalPolyCount;
-	 
+	static double	prepTime;
+	static double	totalTime;
+	static double	timePerPixel;
+	static double	timePerPixelStandardDeviation;
+	static long		intersectionTestCount;
+	static long		intersectionFoundCount; 
+	static long		voxelsTraversed;
+	static long		totalRayCount;
+	static long		totalPolyCount;
+	static long		totalDepths;
+	static long		totalSamples;
+	static double	samplesPerPixel;
+	static double	samplesPerPixelStdDeviation;
+
+
 	struct CameraDataT
 	{
 		MPoint		eye;
@@ -297,6 +302,7 @@ class RayTracer : public MPxCommand
 			default:
 				break;
 			}
+#pragma omp atomic
 			voxelsTraversed++;
 		}
 
@@ -358,7 +364,7 @@ public:
 
 #pragma region ALGO
 	void bresenhaim();
-	MColor shootRay(const MPoint& raySrc, const MVector& rayDir, int depth);
+	MColor shootRay(const MPoint& raySrc, const MVector& rayDir, int depth, int* depthReached=NULL);
 	bool closestIntersection(const MPoint& raySource,const MVector& rayDirection,int& x,int& y,int& z , int& meshIndex, int& innerFaceId, MPoint& intersection, double depth = DBL_MAX );
 	bool closestIntersectionInVoxel(const MPoint& raySource, const MVector& rayDirection, VoxelDataT &voxelData, int &meshIndex, int &innerFaceId, MPoint &intersection);
 
@@ -373,6 +379,8 @@ public:
 	bool pointInVoxelByDirection( const MPoint& closestIntersection,VoxelDataT& voxel, AxisDirection uDirection );
 
 	void calculateSpecularAndDiffuseCoeffs(const MPoint& intersection, const MVector& lightDir, const double distDepth, const MVector& normal, const MVector& view, int x, int y, int z, double& kd, double& ks);
+
+	void RayTracer::computePixelStatistics(double* pixelTimes,int* pixelSamples, int size);
 #pragma endregion 
 
 	
