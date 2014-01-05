@@ -196,10 +196,10 @@ RayTracer::RayTracer()
 	imagePlane.supersamplingCoeff = 1;
 	imagePlane.ssType = RayTracer::ImagePlaneDataT::UNIFORM;
 
-	imagePlane.ssAdaptiveTolerance = 5;
+	imagePlane.ssAdaptiveTolerance = 0.05;
 	imagePlane.ssAdaptiveMinSamples = 1;
 	imagePlane.ssAdaptiveMaxSamples = 128;
-	imagePlane.ssAdaptiveErrorProbability = 0.1;
+	imagePlane.ssAdaptiveErrorProbability = 0.1; 
 
 	sceneParams.voxelsPerDimension = 1;
 	sceneParams.voxelsPerDimensionSqr = 1;
@@ -533,7 +533,7 @@ void RayTracer::computeAndStoreMeshData()
 				faceIt.getUVs(f.us, f.vs);
 			}
 		}
-		meshesData.push_back(aMesh);
+		meshesData.push_back(aMesh); 
 
 #ifdef PRINT_FOR_DEBUG
 		PRINT_IN_MAYA(MString("Storing mesh, bb is:") + pointToString(aMesh.min) + "," + pointToString(aMesh.max));
@@ -720,7 +720,7 @@ void RayTracer::bresenhaim()
 					else {
 						raySource = pointsOnPlane[ssit];
 					}
-					int depth;
+					int depth = 0;
 					pixelColor = sumColors(pixelColor, shootRay(raySource, rayDirection, sceneParams.rayDepth, &depth) / ((float)(count)));
 #pragma omp atomic 
 					totalDepths += depth;
@@ -747,11 +747,11 @@ void RayTracer::bresenhaim()
 				else {
 					raySource = nextPoint;
 				}
-				int depth;
-				newColor = shootRay(raySource, rayDirection, sceneParams.rayDepth, &depth);
+				int depth = 0;
+				newColor = shootRay(raySource, rayDirection, sceneParams.rayDepth, &depth); 
 #pragma omp atomic 
 				totalDepths += depth;
-				count++;
+				count++; 
 				
 				if (1 == count) // first ray - here we initialize all the variance things
 				{
@@ -965,7 +965,7 @@ MColor RayTracer::shootRay(const MPoint& raySrc, const MVector& rayDir, int dept
 	double sum = angle1 + angle2;
 	double dif = angle1 - angle2;
 	double kr = pow( sin(dif), 2)/ pow(sin(sum), 2) * ( 1 + pow(cos(sum), 2)/ pow( cos(dif), 2)) / 2;
-	
+	kr = std::min(1.0,kr);
 	//double kr = mat.kr0 + (1 - mat.kr0) * pow( 1 - coss, 5);
 	double kt = (1 - kr) * mat.transparency;
 	
@@ -990,6 +990,9 @@ MColor RayTracer::shootRay(const MPoint& raySrc, const MVector& rayDir, int dept
 	}
 	if (NULL != depthReached) {
 		*depthReached = 1 + std::max(transparentDepth, reflectedDepth);
+		if (*depthReached > 2) {
+			bool ok = true;
+		}
 	}
 
 	return pixelColor;
