@@ -25,6 +25,12 @@ long	RayTracer::intersectionFoundCount = 0;
 long	RayTracer::voxelsTraversed = 0;
 long	RayTracer::totalRayCount = 0;
 long	RayTracer::totalPolyCount = 0;
+long	RayTracer::totalDepths = 0;
+long	RayTracer::totalSamples = 0;
+double	RayTracer::samplesPerPixel = 0;
+double	RayTracer::samplesPerPixelStdDeviation = 0;
+
+
 
 
 char*	RayTracer::outputFilePath = "C://temp//scene.iff";
@@ -208,6 +214,10 @@ RayTracer::RayTracer()
 	voxelsTraversed = 0;
 	totalRayCount = 0;
 	totalPolyCount = 0;
+	totalDepths = 0;
+	totalSamples = 0;
+	samplesPerPixel = 0;
+	samplesPerPixelStdDeviation = 0;
 
 	minScene = MPoint( DBL_MAX ,DBL_MAX,DBL_MAX);
 	maxScene = MPoint(-DBL_MAX, -DBL_MAX, -DBL_MAX);
@@ -267,6 +277,10 @@ void RayTracer::printStatisticsReport()
 	os << "voxelsPerRay " << (voxelsTraversed / (double)totalRayCount) << endl;
 	os << "intersectionTests " << intersectionTestCount << endl;
 	os << "Intersections " << ((double)intersectionFoundCount/intersectionTestCount) * 100 << "%" << endl;
+
+	os << "averageSamplingRate " << samplesPerPixel << endl;
+	os << "samplingRateDeviation " << samplesPerPixelStdDeviation << endl;
+	os << "averageLength "  << totalDepths / (double)totalSamples << endl;
 
 	std::ofstream outfile;
 	outfile.open(statisticsFilePath);
@@ -668,19 +682,23 @@ void RayTracer::bresenhaim()
 {
 	int width = imagePlane.imgWidth;
 	int height = imagePlane.imgHeight;
-	unsigned char* pixels = new unsigned char[width*height*4];
-	memset(pixels,0,width*height*4);
-
 	int totalPixels = width*height;
+	unsigned char* pixels = new unsigned char[totalPixels*4];
+	double* pixelTimes = new double[totalPixels];
+	int* pixelSamples =  new int[totalPixels];
+	memset(pixels,0,totalPixels*4);
+	memset(pixelTimes,0,totalPixels*sizeof(double));
+	
 
-//#pragma omp parallel for schedule(dynamic,100) num_threads(8)
+#pragma region PARALLEL COMPUTATION
+#pragma omp parallel for schedule(dynamic,100) num_threads(8)
 	for(int it = 0; it < totalPixels; ++it)
 	{
+		MTimer timer;
+		timer.beginTimer();
 		int w = it % width;
 		int h = it / width;
-
 		MColor pixelColor;
-
 		vector<MPoint> pointsOnPlane;
 		
 		imagePlane.getPointsOnIP(w, h, pointsOnPlane);
@@ -693,6 +711,7 @@ void RayTracer::bresenhaim()
 				int count = pointsOnPlane.size();
 				MPoint raySource = activeCameraData.eye;
 				MVector rayDirection = activeCameraData.viewDir;
+				pixelSamples[it] = count;
 				for(int ssit = 0; ssit < count; ++ssit )
 				{
 					if (activeCameraData.isPerspective) {
@@ -701,8 +720,10 @@ void RayTracer::bresenhaim()
 					else {
 						raySource = pointsOnPlane[ssit];
 					}
-					pixelColor = sumColors(pixelColor, shootRay(raySource, rayDirection, 1) / ((float)(count)));
-
+					int depth;
+					pixelColor = sumColors(pixelColor, shootRay(raySource, rayDirection, sceneParams.rayDepth, &depth) / ((float)(count)));
+#pragma omp atomic 
+					totalDepths += depth;
 				}
 			}
 			break;
@@ -716,8 +737,9 @@ void RayTracer::bresenhaim()
 			MColor colorExpectation;
 			MColor colorPrevExpectation;
 			MColor colorVariance;
-
+			pixelSamples[it] = 0;
 			while (!needToStop) {
+				pixelSamples[it] ++;
 				MPoint nextPoint = imagePlane.nextRandomPointOnIP(w, h);
 				if (activeCameraData.isPerspective) {
 					rayDirection = (nextPoint - activeCameraData.eye).normal();
@@ -725,7 +747,10 @@ void RayTracer::bresenhaim()
 				else {
 					raySource = nextPoint;
 				}
-				newColor = shootRay(raySource, rayDirection, 1); 
+				int depth;
+				newColor = shootRay(raySource, rayDirection, sceneParams.rayDepth, &depth);
+#pragma omp atomic 
+				totalDepths += depth;
 				count++;
 				
 				if (1 == count) // first ray - here we initialize all the variance things
@@ -759,14 +784,54 @@ void RayTracer::bresenhaim()
 		pixels[h*width*4 + w*4] = (unsigned char) (pixelColor.r * 255.0);
 		pixels[h*width*4 + w*4 + 1] = (unsigned char) (pixelColor.g * 255.0);
 		pixels[h*width*4 + w*4 + 2] = (unsigned char) (pixelColor.b * 255.0);
-		
+
+		timer.endTimer();
+		pixelTimes[it] = timer.elapsedTime();
 	}
+#pragma endregion
+
+	computePixelStatistics(pixelTimes,pixelSamples, totalPixels);
 
 	MImage img;
 	img.setPixels(pixels,width,height);
 	img.writeToFile(outputFilePath);
 	img.release();
 	delete [] pixels;
+	delete [] pixelTimes;
+}
+
+void RayTracer::computePixelStatistics(double* pixelTimes,int* pixelSamples, int size)
+{
+	double sumTimePerPixel = 0;
+	double averageTimePerPixel = 0;
+	double varianceTimePerPixel = 0;
+
+	double sumSamples = 0;
+	double avgSamples = 0;
+	double varSamples = 0;
+
+	for (int i = 0; i < size; i++) 
+	{
+		sumTimePerPixel += pixelTimes[i];
+		sumSamples += pixelSamples[i];
+	}
+
+	averageTimePerPixel = sumTimePerPixel / (double)size;
+	avgSamples = sumSamples / (double) size;
+	for (int i = 0; i < size; i++) 
+	{
+		varianceTimePerPixel += (pixelTimes[i] - averageTimePerPixel) * (pixelTimes[i] - averageTimePerPixel);
+		varSamples += (pixelSamples[i] - avgSamples) * (pixelSamples[i] - avgSamples);
+	}
+	varianceTimePerPixel = varianceTimePerPixel/(double)size;
+	varSamples = varSamples / (double)size;
+
+	timePerPixel = averageTimePerPixel;
+	timePerPixelStandardDeviation = sqrt(varianceTimePerPixel);
+
+	samplesPerPixel = avgSamples;
+	samplesPerPixelStdDeviation = sqrt(varSamples);
+	totalSamples = sumSamples;
 }
 
 bool getOutRay(const MeshDataT& mesh, const MVector& view, const MPoint& inPoint, const MVector& inRay, MPoint& outPoint, MVector& outRay)
@@ -828,7 +893,7 @@ void RayTracer::calculateSpecularAndDiffuseCoeffs(const MPoint& intersection, co
 	}
 }
 
-MColor RayTracer::shootRay(const MPoint& raySrc, const MVector& rayDir, int depth)
+MColor RayTracer::shootRay(const MPoint& raySrc, const MVector& rayDir, int depth, int* depthReached)
 {
 	int x, y, z;
 	int meshIdx, faceIdx;
@@ -884,10 +949,12 @@ MColor RayTracer::shootRay(const MPoint& raySrc, const MVector& rayDir, int dept
 		}
 	}
 
-	if( depth < 1) 
-		return pixelColor;
+	if (NULL != depthReached) {
+		*depthReached = 1;
+	}
+
 	MVector inRay;
-	if (! transmissionRay(rayDir , normal, 1, mesh.material.refractiveIndex, inRay))
+	if (depth < 1 || ! transmissionRay(rayDir , normal, 1, mesh.material.refractiveIndex, inRay))
 		return pixelColor;
 
 	double cos1 = - rayDir *  normal;
@@ -902,19 +969,27 @@ MColor RayTracer::shootRay(const MPoint& raySrc, const MVector& rayDir, int dept
 	//double kr = mat.kr0 + (1 - mat.kr0) * pow( 1 - coss, 5);
 	double kt = (1 - kr) * mat.transparency;
 	
+	double effectiveTransparency = ((1 - mat.reflectivity) * (1 - kr)) * mat.transparency;
+	double effectiveReflectivity = mat.reflectivity + kr * (1 - mat.reflectivity);
+
+	int transparentDepth = 0;
+	int reflectedDepth = 0;
 
 	if(mat.isTransparent){
 		MVector outRay;
 		MPoint outPoint;
 		if(getOutRay(mesh, rayDir, intersection, inRay, outPoint, outRay)){
-				MColor second = shootRay(outPoint, outRay, depth - 1) * kt;
-				pixelColor = sumColors( pixelColor , second);
+				MColor second = shootRay(outPoint, outRay, depth - 1, &transparentDepth);
+				pixelColor = sumColors( pixelColor , second * effectiveTransparency);
 		}
 	}
 	if(mat.isReflective) {
 		MVector reflected = reflectedRay(rayDir, normal);
-		MColor reflColor = shootRay(intersection + reflected * 0.001, reflected, depth - 1);
-		pixelColor = sumColors(pixelColor, reflColor * kr * mat.reflectivity ); 
+		MColor reflColor = shootRay(intersection + reflected * 0.001, reflected, depth - 1, &reflectedDepth);
+		pixelColor = sumColors(pixelColor, reflColor * effectiveReflectivity ); 
+	}
+	if (NULL != depthReached) {
+		*depthReached = 1 + std::max(transparentDepth, reflectedDepth);
 	}
 
 	return pixelColor;
@@ -1053,6 +1128,7 @@ inline bool RayTracer::pointInVoxelByDirection( const MPoint& closestIntersectio
 // Return false if it arrives to the scene bounds and doesn't meet any mesh an some point.
 bool RayTracer::closestIntersection(const MPoint& raySource,const MVector& rayDirection, int& x, int& y, int& z , int& meshIndex, int& innerFaceId, MPoint& intersection , double depth)
 {
+#pragma omp atomic
 	totalRayCount++;
 
 	AxisDirection  farAxisDir;
@@ -1105,7 +1181,9 @@ bool RayTracer::closestIntersectionInVoxel(const MPoint& raySource, const MVecto
 		vector<int>& faceIds = it->second;
 		for(currentFaceIndex = (int) faceIds.size() - 1; currentFaceIndex >= 0; --currentFaceIndex)
 		{
+#pragma omp atomic
 			intersectionTestCount++;
+			
 			Face& face = mesh.faces[faceIds[currentFaceIndex]];
 			/*
 			mesh.getPolygonVertices(faceIds[currentFaceIndex], vertexIds);
@@ -1128,7 +1206,9 @@ bool RayTracer::closestIntersectionInVoxel(const MPoint& raySource, const MVecto
 				intersection = curIntersection;
 				minTime = time;
 				res = true;
-				intersectionFoundCount++;
+#pragma omp atomic
+			intersectionFoundCount++;
+				
 			}
 		}
 	}

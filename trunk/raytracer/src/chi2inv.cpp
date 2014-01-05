@@ -9,6 +9,18 @@ Chi2Inv::Chi2Inv() {}
 
 double Chi2Inv::chi2inv(double p, int v) {
 	int row = floor(p*100);
+	if (row < 1) {
+		row = 1;
+	}
+	if (row > 99) {
+		row = 99;
+	}
+	if (v < 1) {
+		v = 1;
+	}
+	if (v > 128) {
+		v = 128;
+	}
 	return _chi2inv[row][v];
 }
 
