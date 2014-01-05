@@ -61,7 +61,7 @@ using namespace util;
 #define		RAND_PRECISION			1000
 #define		RAND					((double)( rand() % RAND_PRECISION)) / ((double) (RAND_PRECISION - 1))
 
-#define		BACKGROUND_COLOR		MColor(0.41, 0.48, 0.53, 1)
+#define		BACKGROUND_COLOR		MColor(0, 0, 0, 1)
 
 class RayTracer : public MPxCommand
 {
@@ -372,7 +372,7 @@ public:
 
 	bool pointInVoxelByDirection( const MPoint& closestIntersection,VoxelDataT& voxel, AxisDirection uDirection );
 
-	MColor calculateSpecularAndDiffuse(const MVector& viewDirection,const MVector& lightDirection,const  MVector& normalAtPoint,const MColor& lightColor,const MeshDataT& mesh,const double* bc);
+	void calculateSpecularAndDiffuseCoeffs(const MPoint& intersection, const MVector& lightDir, const double distDepth, const MVector& normal, const MVector& view, int x, int y, int z, double& kd, double& ks);
 #pragma endregion 
 
 	

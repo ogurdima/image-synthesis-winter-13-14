@@ -343,6 +343,22 @@ namespace util
 		return (ligthDir - 2 * normal * ( ligthDir * normal)).normal();
 	}
 
+	// In formula I = -viewRay
+	bool transmissionRay(const MVector& viewRay, const MVector& normal, const float fromU, const float toU, MVector& ray)
+	{
+		double ratio = fromU / toU;
+		MVector rv = ratio * viewRay;
+		double I_dot_N = (-viewRay) * normal;
+		double underRootExp = 1 - ratio*ratio*(1 - (I_dot_N*I_dot_N));
+		if( (underRootExp) < 0 ) {
+			// Total internal reflection
+			return false;
+		}
+
+		ray =  (ratio*viewRay + ( -ratio* viewRay* normal - sqrt(underRootExp) ) * normal).normal();
+		return true;
+	}
+
 	MVector halfVector(const MVector& lightDir, const MVector& viewdDir )
 	{
 		return (lightDir + viewdDir).normal();

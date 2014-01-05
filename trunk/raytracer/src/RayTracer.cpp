@@ -769,9 +769,67 @@ void RayTracer::bresenhaim()
 	delete [] pixels;
 }
 
+bool getOutRay(const MeshDataT& mesh, const MVector& view, const MPoint& inPoint, const MVector& inRay, MPoint& outPoint, MVector& outRay)
+{
+	MVector dir = inRay;
+	MPoint src = inPoint + dir * DOUBLE_NUMERICAL_THRESHHOLD * 100;
+	int size = mesh.faces.size();
+
+	for( int count = 100; count > 0; --count) {
+	
+		bool intersected = false;
+		MPoint tIntersection, mintIntersection;
+		int outFaceId;
+		double minTime = DBL_MAX, time = DBL_MAX;
+
+		for(int fi = 0; fi < size; ++ fi) {
+			if(rayIntersectsTriangle(src + dir * DOUBLE_NUMERICAL_THRESHHOLD * 100, dir, mesh.faces[fi].vertices, time, tIntersection) && time < minTime) {
+				intersected = true;
+				minTime = time;
+				mintIntersection = tIntersection;
+				outFaceId = fi;
+			}
+		}
+
+		if( ! intersected) // out face is not found
+			return false;
+
+		const Face& outFace = mesh.faces[outFaceId];
+		double bc2[3]; // baricentric coords
+		calculateBaricentricCoordinates(outFace.vertices, mintIntersection, bc2 );
+
+		MVector normal2 = (bc2[0] * outFace.normals[0] +  bc2[1] * outFace.normals[1] +  bc2[2] * outFace.normals[2]).normal();
+		if(normal2* dir > 0 ) 
+			normal2 = - normal2;
+		MVector r;
+		if( transmissionRay( dir, normal2, mesh.material.refractiveIndex, 1, r)) {
+			outRay = r;
+			outPoint = mintIntersection;
+			return true;
+		}	
+
+		dir = reflectedRay(inRay, normal2);
+		src = mintIntersection + dir * DOUBLE_NUMERICAL_THRESHHOLD * 100;
+
+	}
+	return false;
+}
+
+
+void RayTracer::calculateSpecularAndDiffuseCoeffs(const MPoint& intersection, const MVector& lightDir, const double distDepth, const MVector& normal, const MVector& view, int x, int y, int z, double& kd, double& ks) 
+{ 
+	kd = ks = 0.0;
+	int meshId, faceId;
+	MPoint secondIntersection;
+
+	if(! closestIntersection(intersection, -lightDir , x, y, z, meshId , faceId, secondIntersection, distDepth )){
+		kd = std::max(- (lightDir * normal), 0.0);
+		ks = std::max( -(reflectedRay(lightDir, normal) * view) , 0.0);
+	}
+}
+
 MColor RayTracer::shootRay(const MPoint& raySrc, const MVector& rayDir, int depth)
 {
-
 	int x, y, z;
 	int meshIdx, faceIdx;
 	MPoint intersection;
@@ -784,10 +842,12 @@ MColor RayTracer::shootRay(const MPoint& raySrc, const MVector& rayDir, int dept
 	Face& face = meshesData[meshIdx].faces[faceIdx];
 	Material& mat = mesh.material;
 
+#pragma region MeshPrecalculations
 	double bc[3]; // baricentric coords
 	calculateBaricentricCoordinates(face.vertices, intersection, bc );
 
 	MVector normal = (bc[0] * face.normals[0] +  bc[1] * face.normals[1] +  bc[2] * face.normals[2]).normal();
+
 	MColor diffuseMaterialColor;
 	// TODO: diffuse coefficient
 	if (!mat.isTextured) {
@@ -799,7 +859,10 @@ MColor RayTracer::shootRay(const MPoint& raySrc, const MVector& rayDir, int dept
 		double v = bc[0] * face.vs[0] +  bc[1] * face.vs[1] +  bc[2] * face.vs[2];
 		diffuseMaterialColor = getBilinearFilteredPixelColor(mat.texture, u, v);
 	}
-	
+
+
+#pragma endregion
+
 	MColor pixelColor = MColor(0,0,0,1);
 	for (int li = (int) lightingData.size()- 1; li >= 0; --li)
 	{
@@ -807,55 +870,52 @@ MColor RayTracer::shootRay(const MPoint& raySrc, const MVector& rayDir, int dept
 		MColor lightColor = currLight.color * currLight.intencity;
 
 		if( LightDataT::AMBIENT == currLight.type) {
-			pixelColor = sumColors(mat.ambient * lightColor, pixelColor);
+			pixelColor = sumColors(mat.ambient * lightColor * (1 - mat.transparency), pixelColor);
 		}
 		else if(LightDataT::DIRECTIONAL == currLight.type || LightDataT::POINT == currLight.type)
 		{
-			MVector lightDir = currLight.directionToPoint(intersection);
-			MVector	intersectionToLight = -lightDir;
-			double diffuseComponent = (intersectionToLight * normal);
-			bool isInShadow = false;
-			{
-				int currX = x, currY = y, currZ = z;
-				double depth = currLight.distanceToPoint(intersection);
-				MPoint shadowIntersection;
-				int shadowMeshId, shadowFaceId;
-				MPoint shadowStartingPoint = intersection + intersectionToLight * DOUBLE_NUMERICAL_THRESHHOLD * 10;
-				if(diffuseComponent > 0.01 && closestIntersection(shadowStartingPoint, intersectionToLight , currX, currY, currZ, shadowMeshId, shadowFaceId, shadowIntersection, depth )) {
-					isInShadow = true;
-				}
-				if (diffuseComponent < 0.1 && isInShadow) {
-					isInShadow = false;
-					double diff = (0.1 - diffuseComponent);
-					double newComponent = diffuseComponent - diff*diff;
-					diffuseComponent = newComponent > 0 ? newComponent : 0; // oooooo magic! does not work actually
-				}
-			}
-			if(! isInShadow ) {
-				
-				if (diffuseComponent > 0) {
-					pixelColor = sumColors(diffuseComponent * diffuseMaterialColor * lightColor, pixelColor);
-				}
-				else {
-					//return MColor(1,0,0,1);
-				}
-				if (mat.cosPower > 0) {
-					double specularComponent = -(float)(reflectedRay(lightDir, normal) * rayDir);
-					if(specularComponent > 0) {
-						pixelColor = sumColors(pow(specularComponent, mat.cosPower) * mat.specular * lightColor, pixelColor);
-					}
-					else {
-						//return MColor(1,1,0,1);
-					}
-				}
-			}
-			else {
-				//return MColor(0,0,1,1);
-			}
+			double kd(0.0), ks(0.0);
+			calculateSpecularAndDiffuseCoeffs(intersection, currLight.directionToPoint(intersection), currLight.distanceToPoint(intersection), normal, rayDir, 
+				x, y, z, kd, ks);
+
+			pixelColor = sumColors(pixelColor, diffuseMaterialColor * kd * lightColor * (1 - mat.transparency) * mat.diffuseCoeff);
+			if( mat.cosPower > 1)
+				pixelColor = sumColors(pixelColor, mat.specular * pow(ks, mat.cosPower) * lightColor);
 		}
 	}
 
+	if( depth < 1) 
+		return pixelColor;
+	MVector inRay;
+	if (! transmissionRay(rayDir , normal, 1, mesh.material.refractiveIndex, inRay))
+		return pixelColor;
 
+	double cos1 = - rayDir *  normal;
+	double angle1 = acos(cos1);
+	double cos2 = - inRay *  normal;
+	double angle2 = acos(cos2);
+
+	double sum = angle1 + angle2;
+	double dif = angle1 - angle2;
+	double kr = pow( sin(dif), 2)/ pow(sin(sum), 2) * ( 1 + pow(cos(sum), 2)/ pow( cos(dif), 2)) / 2;
+	
+	//double kr = mat.kr0 + (1 - mat.kr0) * pow( 1 - coss, 5);
+	double kt = (1 - kr) * mat.transparency;
+	
+
+	if(mat.isTransparent){
+		MVector outRay;
+		MPoint outPoint;
+		if(getOutRay(mesh, rayDir, intersection, inRay, outPoint, outRay)){
+				MColor second = shootRay(outPoint, outRay, depth - 1) * kt;
+				pixelColor = sumColors( pixelColor , second);
+		}
+	}
+	if(mat.isReflective) {
+		MVector reflected = reflectedRay(rayDir, normal);
+		MColor reflColor = shootRay(intersection + reflected * 0.001, reflected, depth - 1);
+		pixelColor = sumColors(pixelColor, reflColor * kr * mat.reflectivity ); 
+	}
 
 	return pixelColor;
 }
@@ -863,13 +923,13 @@ MColor RayTracer::shootRay(const MPoint& raySrc, const MVector& rayDir, int dept
 bool RayTracer::findStartingVoxelIndeces(const MPoint& raySrc, const MVector& rayDirection, int& x, int& y, int& z)
 {
 
-	if(activeCameraData.isPerspective && cameraInSceneBB)
-	{
-		x = initCameraVoxelX;
-		y = initCameraVoxelY;
-		z = initCameraVoxelZ;
-		return true;
-	}
+	//if(activeCameraData.isPerspective && cameraInSceneBB)
+	//{
+	//	x = initCameraVoxelX;
+	//	y = initCameraVoxelY;
+	//	z = initCameraVoxelZ;
+	//	return true;
+	//}
 	x = y = z = 0;
 	if(isPointInVolume(raySrc, minScene, maxScene)  &&
 		findIndecesByDimension( raySrc, X_POS, x, y, z) &&

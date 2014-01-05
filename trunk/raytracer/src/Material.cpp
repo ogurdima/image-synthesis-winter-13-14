@@ -23,6 +23,10 @@ void Material::clear()
 	type = MT_LAMBERT;
 	isTransparent = false;
 	isTextured = false;
+	transparency = 0;
+	reflectivity = 0;
+	refractiveIndex = 1;
+	kr0 = 0;
 	//isMultiTextured = false;
 	ambient = MColor(0,0,0,0);
 	diffuse = MColor(0,0,0,0);
@@ -302,8 +306,14 @@ MStatus Material::loadLambert(MFnDependencyNode *pShader)
 	// Check if material is transparent
 	if (pLambert->findPlug("transparency").isConnected() || pLambert->transparency().r>0.0f){
 		isTransparent = true;
-		transparancy = pLambert->transparency().r;
+		transparency = pLambert->transparency().r;
 	}
+
+	refractiveIndex = pLambert->refractiveIndex();
+	kr0 = pow(1 - refractiveIndex, 2) / pow( 1 + refractiveIndex, 2);
+	isReflective = false;
+	reflectivity = 0;
+
 
 	delete pLambert;
 	return MS::kSuccess;
@@ -358,8 +368,12 @@ MStatus Material::loadPhong(MFnDependencyNode *pShader)
 	// Check if material is transparent
 	if (pPhong->findPlug("transparency").isConnected() || pPhong->transparency().r>0.0f){
 		isTransparent = true;
-		transparancy = pPhong->transparency().r;
+		transparency = pPhong->transparency().r;
 	}
+	refractiveIndex = pPhong->refractiveIndex();
+	kr0 = pow(1 - refractiveIndex, 2) / pow( 1 + refractiveIndex, 2);
+	isReflective = true;
+	reflectivity = pPhong->reflectivity();
 
 	delete pPhong;
 	return MS::kSuccess;
